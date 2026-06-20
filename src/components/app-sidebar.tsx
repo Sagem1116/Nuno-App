@@ -16,6 +16,7 @@ import {
   Newspaper,
   Mail,
   Keyboard,
+  Timer,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
@@ -27,6 +28,7 @@ const items = [
   { title: "Tarefas", url: "/tarefas", icon: CheckSquare },
   { title: "Finanças", url: "/financas", icon: Wallet },
   { title: "Travel Planner", url: "/viagens", icon: Plane },
+  { title: "Cronómetro", url: "/cronometro", icon: Timer },
   { title: "Mundial", url: "/mundial", icon: Trophy },
   { title: "Notícias", url: "/noticias", icon: Newspaper },
   { title: "Email", url: "/email", icon: Mail },

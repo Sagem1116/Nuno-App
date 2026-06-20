@@ -29,6 +29,7 @@ import { Route as AppFinancasRouteImport } from './routes/_app.financas'
 import { Route as AppEmailRouteImport } from './routes/_app.email'
 import { Route as AppDriveRouteImport } from './routes/_app.drive'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppCronometroRouteImport } from './routes/_app.cronometro'
 import { Route as AppAtalhosRouteImport } from './routes/_app.atalhos'
 import { Route as AppAppsRouteImport } from './routes/_app.apps'
 import { Route as AppAiRouteImport } from './routes/_app.ai'
@@ -146,6 +147,11 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCronometroRoute = AppCronometroRouteImport.update({
+  id: '/cronometro',
+  path: '/cronometro',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAtalhosRoute = AppAtalhosRouteImport.update({
   id: '/atalhos',
   path: '/atalhos',
@@ -239,6 +245,7 @@ export interface FileRoutesByFullPath {
   '/ai': typeof AppAiRouteWithChildren
   '/apps': typeof AppAppsRoute
   '/atalhos': typeof AppAtalhosRoute
+  '/cronometro': typeof AppCronometroRoute
   '/dashboard': typeof AppDashboardRoute
   '/drive': typeof AppDriveRouteWithChildren
   '/email': typeof AppEmailRoute
@@ -276,6 +283,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/apps': typeof AppAppsRoute
   '/atalhos': typeof AppAtalhosRoute
+  '/cronometro': typeof AppCronometroRoute
   '/dashboard': typeof AppDashboardRoute
   '/email': typeof AppEmailRoute
   '/financas': typeof AppFinancasRoute
@@ -313,6 +321,7 @@ export interface FileRoutesById {
   '/_app/ai': typeof AppAiRouteWithChildren
   '/_app/apps': typeof AppAppsRoute
   '/_app/atalhos': typeof AppAtalhosRoute
+  '/_app/cronometro': typeof AppCronometroRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/drive': typeof AppDriveRouteWithChildren
   '/_app/email': typeof AppEmailRoute
@@ -353,6 +362,7 @@ export interface FileRouteTypes {
     | '/ai'
     | '/apps'
     | '/atalhos'
+    | '/cronometro'
     | '/dashboard'
     | '/drive'
     | '/email'
@@ -390,6 +400,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/apps'
     | '/atalhos'
+    | '/cronometro'
     | '/dashboard'
     | '/email'
     | '/financas'
@@ -426,6 +437,7 @@ export interface FileRouteTypes {
     | '/_app/ai'
     | '/_app/apps'
     | '/_app/atalhos'
+    | '/_app/cronometro'
     | '/_app/dashboard'
     | '/_app/drive'
     | '/_app/email'
@@ -611,6 +623,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/cronometro': {
+      id: '/_app/cronometro'
+      path: '/cronometro'
+      fullPath: '/cronometro'
+      preLoaderRoute: typeof AppCronometroRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/atalhos': {
@@ -801,6 +820,7 @@ interface AppRouteChildren {
   AppAiRoute: typeof AppAiRouteWithChildren
   AppAppsRoute: typeof AppAppsRoute
   AppAtalhosRoute: typeof AppAtalhosRoute
+  AppCronometroRoute: typeof AppCronometroRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppDriveRoute: typeof AppDriveRouteWithChildren
   AppEmailRoute: typeof AppEmailRoute
@@ -819,6 +839,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAiRoute: AppAiRouteWithChildren,
   AppAppsRoute: AppAppsRoute,
   AppAtalhosRoute: AppAtalhosRoute,
+  AppCronometroRoute: AppCronometroRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppDriveRoute: AppDriveRouteWithChildren,
   AppEmailRoute: AppEmailRoute,
@@ -850,13 +871,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

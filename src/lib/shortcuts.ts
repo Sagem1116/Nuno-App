@@ -15,6 +15,7 @@ export const SHORTCUTS: Shortcut[] = [
   { combo: "Alt + T", key: "t", to: "/tarefas", label: "Tarefas" },
   { combo: "Alt + F", key: "f", to: "/financas", label: "Finanças" },
   { combo: "Alt + V", key: "v", to: "/viagens", label: "Travel Planner" },
+  { combo: "Alt + C", key: "c", to: "/cronometro", label: "Cronómetro" },
   { combo: "Alt + M", key: "m", to: "/mundial", label: "Mundial" },
   { combo: "Alt + W", key: "w", to: "/noticias", label: "Notícias" },
   { combo: "Alt + E", key: "e", to: "/email", label: "Email" },
