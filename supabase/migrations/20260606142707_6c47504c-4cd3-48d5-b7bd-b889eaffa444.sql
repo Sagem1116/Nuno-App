@@ -1,0 +1,3 @@
+ALTER TABLE public.tasks
+  ADD COLUMN IF NOT EXISTS start_time TIME NULL,
+  ADD COLUMN IF NOT EXISTS end_time TIME NULL;

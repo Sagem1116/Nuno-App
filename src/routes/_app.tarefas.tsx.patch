@@ -1,0 +1,53 @@
+*** Begin Patch
+*** Update File: c:\Users\Nuno\Desktop\nunoapp\hello-world-starter\src\routes\_app.tarefas.tsx
+@@
+-  const [cursor, setCursor] = useState(new Date());
++  const [cursor, setCursor] = useState(new Date());
++  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+@@
+-      ) : view === "daily" ? (
++      ) : view === "daily" ? (
+         <DailyView tasks={filteredAll} onToggle={toggleStatus} onEdit={(t) => { setEditing(t); setOpen(true); }} onDelete={remove} />
+       ) : view === "weekly" ? (
+-        <WeeklyView tasks={filteredAll} cursor={cursor} setCursor={setCursor}
+-          onToggle={toggleStatus} onEdit={(t) => { setEditing(t); setOpen(true); }} onDelete={remove} />
++        <WeeklyView tasks={filteredAll} cursor={cursor} setCursor={setCursor}
++          onSelectDay={(d) => setSelectedDay(d)}
++          onToggle={toggleStatus} onEdit={(t) => { setEditing(t); setOpen(true); }} onDelete={remove} />
+       ) : (
+-        <MonthlyView tasks={filteredAll} cursor={cursor} setCursor={setCursor}
+-          onClickDay={(d) => {
+-            setEditing(null); setOpen(true);
+-            // pre-fill via editing trick: create temp
+-            setEditing({ id: "", title: "", description: "", priority: "medium",
+-              due_date: format(d, "yyyy-MM-dd"), status: "pending", created_at: "" } as Task);
+-          }} />
++        <MonthlyView tasks={filteredAll} cursor={cursor} setCursor={setCursor}
++          onSelectDay={(d) => setSelectedDay(d)} />
+       )}
+@@
+       {open && (
+         <TaskDialog
+           initial={editing && editing.id ? editing : null}
+-          prefillDate={editing && !editing.id ? editing.due_date : null}
++          prefillDate={editing && !editing.id ? editing.due_date : (selectedDay ? format(selectedDay, "yyyy-MM-dd") : null)}
+           onClose={() => setOpen(false)}
+           onSave={handleSave}
+         />
+       )}
++      {/* Selected day tasks panel */}
++      {selectedDay && (
++        <div className="mt-4">
++          <div className="flex items-center justify-between">
++            <h3 className="text-sm font-semibold neon-text">{format(selectedDay, "EEEE, d 'de' MMMM", { locale: pt })}</h3>
++            <div className="flex gap-2">
++              <button onClick={() => { setSelectedDay(null); }} className="px-2 py-1 text-sm rounded hover:bg-accent">Fechar</button>
++              <button onClick={() => { setEditing(null); setOpen(true); }} className="px-2 py-1 text-sm rounded bg-primary text-primary-foreground">Nova</button>
++            </div>
++          </div>
++          <div className="mt-3 space-y-2">
++            <DayTasksList date={selectedDay} tasks={filteredAll} onToggle={toggleStatus} onEdit={(t) => { setEditing(t); setOpen(true); }} onDelete={remove} />
++          </div>
++        </div>
++      )}
+*** End Patch

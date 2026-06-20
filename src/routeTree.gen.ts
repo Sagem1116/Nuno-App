@@ -9,38 +9,491 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiNewsRouteImport } from './routes/api/news'
+import { Route as ApiMundialRouteImport } from './routes/api/mundial'
+import { Route as ApiChatTravelRouteImport } from './routes/api/chat-travel'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as AppViagensRouteImport } from './routes/_app.viagens'
+import { Route as AppTarefasRouteImport } from './routes/_app.tarefas'
+import { Route as AppReservasRouteImport } from './routes/_app.reservas'
+import { Route as AppProjetosRouteImport } from './routes/_app.projetos'
+import { Route as AppNoticiasRouteImport } from './routes/_app.noticias'
+import { Route as AppNotasRouteImport } from './routes/_app.notas'
+import { Route as AppMundialRouteImport } from './routes/_app.mundial'
+import { Route as AppLinksRouteImport } from './routes/_app.links'
+import { Route as AppFinancasRouteImport } from './routes/_app.financas'
+import { Route as AppEmailRouteImport } from './routes/_app.email'
+import { Route as AppDriveRouteImport } from './routes/_app.drive'
+import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppAtalhosRouteImport } from './routes/_app.atalhos'
+import { Route as AppAppsRouteImport } from './routes/_app.apps'
+import { Route as AppAiRouteImport } from './routes/_app.ai'
+import { Route as AppViagensIndexRouteImport } from './routes/_app.viagens.index'
+import { Route as AppReservasIndexRouteImport } from './routes/_app.reservas.index'
+import { Route as AppDriveIndexRouteImport } from './routes/_app.drive.index'
+import { Route as AppAiIndexRouteImport } from './routes/_app.ai.index'
+import { Route as PViagemSlugRouteImport } from './routes/p.viagem.$slug'
+import { Route as AppViagensTripIdRouteImport } from './routes/_app.viagens.$tripId'
+import { Route as AppDriveTrashRouteImport } from './routes/_app.drive.trash'
+import { Route as AppDriveTagsRouteImport } from './routes/_app.drive.tags'
+import { Route as AppDriveStarredRouteImport } from './routes/_app.drive.starred'
+import { Route as AppDriveRecentRouteImport } from './routes/_app.drive.recent'
+import { Route as AppDriveLinksRouteImport } from './routes/_app.drive.links'
+import { Route as AppAiThreadIdRouteImport } from './routes/_app.ai.$threadId'
+import { Route as ApiPublicHooksPushTickRouteImport } from './routes/api/public/hooks/push-tick'
+import { Route as AppDriveFolderFolderIdRouteImport } from './routes/_app.drive.folder.$folderId'
 
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiNewsRoute = ApiNewsRouteImport.update({
+  id: '/api/news',
+  path: '/api/news',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMundialRoute = ApiMundialRouteImport.update({
+  id: '/api/mundial',
+  path: '/api/mundial',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatTravelRoute = ApiChatTravelRouteImport.update({
+  id: '/api/chat-travel',
+  path: '/api/chat-travel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppViagensRoute = AppViagensRouteImport.update({
+  id: '/viagens',
+  path: '/viagens',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTarefasRoute = AppTarefasRouteImport.update({
+  id: '/tarefas',
+  path: '/tarefas',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReservasRoute = AppReservasRouteImport.update({
+  id: '/reservas',
+  path: '/reservas',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProjetosRoute = AppProjetosRouteImport.update({
+  id: '/projetos',
+  path: '/projetos',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppNoticiasRoute = AppNoticiasRouteImport.update({
+  id: '/noticias',
+  path: '/noticias',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppNotasRoute = AppNotasRouteImport.update({
+  id: '/notas',
+  path: '/notas',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMundialRoute = AppMundialRouteImport.update({
+  id: '/mundial',
+  path: '/mundial',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLinksRoute = AppLinksRouteImport.update({
+  id: '/links',
+  path: '/links',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFinancasRoute = AppFinancasRouteImport.update({
+  id: '/financas',
+  path: '/financas',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppEmailRoute = AppEmailRouteImport.update({
+  id: '/email',
+  path: '/email',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDriveRoute = AppDriveRouteImport.update({
+  id: '/drive',
+  path: '/drive',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAtalhosRoute = AppAtalhosRouteImport.update({
+  id: '/atalhos',
+  path: '/atalhos',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAppsRoute = AppAppsRouteImport.update({
+  id: '/apps',
+  path: '/apps',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAiRoute = AppAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppViagensIndexRoute = AppViagensIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppViagensRoute,
+} as any)
+const AppReservasIndexRoute = AppReservasIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppReservasRoute,
+} as any)
+const AppDriveIndexRoute = AppDriveIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppDriveRoute,
+} as any)
+const AppAiIndexRoute = AppAiIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppAiRoute,
+} as any)
+const PViagemSlugRoute = PViagemSlugRouteImport.update({
+  id: '/p/viagem/$slug',
+  path: '/p/viagem/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppViagensTripIdRoute = AppViagensTripIdRouteImport.update({
+  id: '/$tripId',
+  path: '/$tripId',
+  getParentRoute: () => AppViagensRoute,
+} as any)
+const AppDriveTrashRoute = AppDriveTrashRouteImport.update({
+  id: '/trash',
+  path: '/trash',
+  getParentRoute: () => AppDriveRoute,
+} as any)
+const AppDriveTagsRoute = AppDriveTagsRouteImport.update({
+  id: '/tags',
+  path: '/tags',
+  getParentRoute: () => AppDriveRoute,
+} as any)
+const AppDriveStarredRoute = AppDriveStarredRouteImport.update({
+  id: '/starred',
+  path: '/starred',
+  getParentRoute: () => AppDriveRoute,
+} as any)
+const AppDriveRecentRoute = AppDriveRecentRouteImport.update({
+  id: '/recent',
+  path: '/recent',
+  getParentRoute: () => AppDriveRoute,
+} as any)
+const AppDriveLinksRoute = AppDriveLinksRouteImport.update({
+  id: '/links',
+  path: '/links',
+  getParentRoute: () => AppDriveRoute,
+} as any)
+const AppAiThreadIdRoute = AppAiThreadIdRouteImport.update({
+  id: '/$threadId',
+  path: '/$threadId',
+  getParentRoute: () => AppAiRoute,
+} as any)
+const ApiPublicHooksPushTickRoute = ApiPublicHooksPushTickRouteImport.update({
+  id: '/api/public/hooks/push-tick',
+  path: '/api/public/hooks/push-tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppDriveFolderFolderIdRoute = AppDriveFolderFolderIdRouteImport.update({
+  id: '/folder/$folderId',
+  path: '/folder/$folderId',
+  getParentRoute: () => AppDriveRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/ai': typeof AppAiRouteWithChildren
+  '/apps': typeof AppAppsRoute
+  '/atalhos': typeof AppAtalhosRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/drive': typeof AppDriveRouteWithChildren
+  '/email': typeof AppEmailRoute
+  '/financas': typeof AppFinancasRoute
+  '/links': typeof AppLinksRoute
+  '/mundial': typeof AppMundialRoute
+  '/notas': typeof AppNotasRoute
+  '/noticias': typeof AppNoticiasRoute
+  '/projetos': typeof AppProjetosRoute
+  '/reservas': typeof AppReservasRouteWithChildren
+  '/tarefas': typeof AppTarefasRoute
+  '/viagens': typeof AppViagensRouteWithChildren
+  '/api/chat': typeof ApiChatRoute
+  '/api/chat-travel': typeof ApiChatTravelRoute
+  '/api/mundial': typeof ApiMundialRoute
+  '/api/news': typeof ApiNewsRoute
+  '/ai/$threadId': typeof AppAiThreadIdRoute
+  '/drive/links': typeof AppDriveLinksRoute
+  '/drive/recent': typeof AppDriveRecentRoute
+  '/drive/starred': typeof AppDriveStarredRoute
+  '/drive/tags': typeof AppDriveTagsRoute
+  '/drive/trash': typeof AppDriveTrashRoute
+  '/viagens/$tripId': typeof AppViagensTripIdRoute
+  '/p/viagem/$slug': typeof PViagemSlugRoute
+  '/ai/': typeof AppAiIndexRoute
+  '/drive/': typeof AppDriveIndexRoute
+  '/reservas/': typeof AppReservasIndexRoute
+  '/viagens/': typeof AppViagensIndexRoute
+  '/drive/folder/$folderId': typeof AppDriveFolderFolderIdRoute
+  '/api/public/hooks/push-tick': typeof ApiPublicHooksPushTickRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/apps': typeof AppAppsRoute
+  '/atalhos': typeof AppAtalhosRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/email': typeof AppEmailRoute
+  '/financas': typeof AppFinancasRoute
+  '/links': typeof AppLinksRoute
+  '/mundial': typeof AppMundialRoute
+  '/notas': typeof AppNotasRoute
+  '/noticias': typeof AppNoticiasRoute
+  '/projetos': typeof AppProjetosRoute
+  '/tarefas': typeof AppTarefasRoute
+  '/api/chat': typeof ApiChatRoute
+  '/api/chat-travel': typeof ApiChatTravelRoute
+  '/api/mundial': typeof ApiMundialRoute
+  '/api/news': typeof ApiNewsRoute
+  '/ai/$threadId': typeof AppAiThreadIdRoute
+  '/drive/links': typeof AppDriveLinksRoute
+  '/drive/recent': typeof AppDriveRecentRoute
+  '/drive/starred': typeof AppDriveStarredRoute
+  '/drive/tags': typeof AppDriveTagsRoute
+  '/drive/trash': typeof AppDriveTrashRoute
+  '/viagens/$tripId': typeof AppViagensTripIdRoute
+  '/p/viagem/$slug': typeof PViagemSlugRoute
+  '/ai': typeof AppAiIndexRoute
+  '/drive': typeof AppDriveIndexRoute
+  '/reservas': typeof AppReservasIndexRoute
+  '/viagens': typeof AppViagensIndexRoute
+  '/drive/folder/$folderId': typeof AppDriveFolderFolderIdRoute
+  '/api/public/hooks/push-tick': typeof ApiPublicHooksPushTickRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/_app/ai': typeof AppAiRouteWithChildren
+  '/_app/apps': typeof AppAppsRoute
+  '/_app/atalhos': typeof AppAtalhosRoute
+  '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/drive': typeof AppDriveRouteWithChildren
+  '/_app/email': typeof AppEmailRoute
+  '/_app/financas': typeof AppFinancasRoute
+  '/_app/links': typeof AppLinksRoute
+  '/_app/mundial': typeof AppMundialRoute
+  '/_app/notas': typeof AppNotasRoute
+  '/_app/noticias': typeof AppNoticiasRoute
+  '/_app/projetos': typeof AppProjetosRoute
+  '/_app/reservas': typeof AppReservasRouteWithChildren
+  '/_app/tarefas': typeof AppTarefasRoute
+  '/_app/viagens': typeof AppViagensRouteWithChildren
+  '/api/chat': typeof ApiChatRoute
+  '/api/chat-travel': typeof ApiChatTravelRoute
+  '/api/mundial': typeof ApiMundialRoute
+  '/api/news': typeof ApiNewsRoute
+  '/_app/ai/$threadId': typeof AppAiThreadIdRoute
+  '/_app/drive/links': typeof AppDriveLinksRoute
+  '/_app/drive/recent': typeof AppDriveRecentRoute
+  '/_app/drive/starred': typeof AppDriveStarredRoute
+  '/_app/drive/tags': typeof AppDriveTagsRoute
+  '/_app/drive/trash': typeof AppDriveTrashRoute
+  '/_app/viagens/$tripId': typeof AppViagensTripIdRoute
+  '/p/viagem/$slug': typeof PViagemSlugRoute
+  '/_app/ai/': typeof AppAiIndexRoute
+  '/_app/drive/': typeof AppDriveIndexRoute
+  '/_app/reservas/': typeof AppReservasIndexRoute
+  '/_app/viagens/': typeof AppViagensIndexRoute
+  '/_app/drive/folder/$folderId': typeof AppDriveFolderFolderIdRoute
+  '/api/public/hooks/push-tick': typeof ApiPublicHooksPushTickRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/reset-password'
+    | '/ai'
+    | '/apps'
+    | '/atalhos'
+    | '/dashboard'
+    | '/drive'
+    | '/email'
+    | '/financas'
+    | '/links'
+    | '/mundial'
+    | '/notas'
+    | '/noticias'
+    | '/projetos'
+    | '/reservas'
+    | '/tarefas'
+    | '/viagens'
+    | '/api/chat'
+    | '/api/chat-travel'
+    | '/api/mundial'
+    | '/api/news'
+    | '/ai/$threadId'
+    | '/drive/links'
+    | '/drive/recent'
+    | '/drive/starred'
+    | '/drive/tags'
+    | '/drive/trash'
+    | '/viagens/$tripId'
+    | '/p/viagem/$slug'
+    | '/ai/'
+    | '/drive/'
+    | '/reservas/'
+    | '/viagens/'
+    | '/drive/folder/$folderId'
+    | '/api/public/hooks/push-tick'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/reset-password'
+    | '/apps'
+    | '/atalhos'
+    | '/dashboard'
+    | '/email'
+    | '/financas'
+    | '/links'
+    | '/mundial'
+    | '/notas'
+    | '/noticias'
+    | '/projetos'
+    | '/tarefas'
+    | '/api/chat'
+    | '/api/chat-travel'
+    | '/api/mundial'
+    | '/api/news'
+    | '/ai/$threadId'
+    | '/drive/links'
+    | '/drive/recent'
+    | '/drive/starred'
+    | '/drive/tags'
+    | '/drive/trash'
+    | '/viagens/$tripId'
+    | '/p/viagem/$slug'
+    | '/ai'
+    | '/drive'
+    | '/reservas'
+    | '/viagens'
+    | '/drive/folder/$folderId'
+    | '/api/public/hooks/push-tick'
+  id:
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/auth'
+    | '/reset-password'
+    | '/_app/ai'
+    | '/_app/apps'
+    | '/_app/atalhos'
+    | '/_app/dashboard'
+    | '/_app/drive'
+    | '/_app/email'
+    | '/_app/financas'
+    | '/_app/links'
+    | '/_app/mundial'
+    | '/_app/notas'
+    | '/_app/noticias'
+    | '/_app/projetos'
+    | '/_app/reservas'
+    | '/_app/tarefas'
+    | '/_app/viagens'
+    | '/api/chat'
+    | '/api/chat-travel'
+    | '/api/mundial'
+    | '/api/news'
+    | '/_app/ai/$threadId'
+    | '/_app/drive/links'
+    | '/_app/drive/recent'
+    | '/_app/drive/starred'
+    | '/_app/drive/tags'
+    | '/_app/drive/trash'
+    | '/_app/viagens/$tripId'
+    | '/p/viagem/$slug'
+    | '/_app/ai/'
+    | '/_app/drive/'
+    | '/_app/reservas/'
+    | '/_app/viagens/'
+    | '/_app/drive/folder/$folderId'
+    | '/api/public/hooks/push-tick'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
+  AuthRoute: typeof AuthRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  ApiChatRoute: typeof ApiChatRoute
+  ApiChatTravelRoute: typeof ApiChatTravelRoute
+  ApiMundialRoute: typeof ApiMundialRoute
+  ApiNewsRoute: typeof ApiNewsRoute
+  PViagemSlugRoute: typeof PViagemSlugRoute
+  ApiPublicHooksPushTickRoute: typeof ApiPublicHooksPushTickRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +501,351 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/news': {
+      id: '/api/news'
+      path: '/api/news'
+      fullPath: '/api/news'
+      preLoaderRoute: typeof ApiNewsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mundial': {
+      id: '/api/mundial'
+      path: '/api/mundial'
+      fullPath: '/api/mundial'
+      preLoaderRoute: typeof ApiMundialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat-travel': {
+      id: '/api/chat-travel'
+      path: '/api/chat-travel'
+      fullPath: '/api/chat-travel'
+      preLoaderRoute: typeof ApiChatTravelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/viagens': {
+      id: '/_app/viagens'
+      path: '/viagens'
+      fullPath: '/viagens'
+      preLoaderRoute: typeof AppViagensRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tarefas': {
+      id: '/_app/tarefas'
+      path: '/tarefas'
+      fullPath: '/tarefas'
+      preLoaderRoute: typeof AppTarefasRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/reservas': {
+      id: '/_app/reservas'
+      path: '/reservas'
+      fullPath: '/reservas'
+      preLoaderRoute: typeof AppReservasRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/projetos': {
+      id: '/_app/projetos'
+      path: '/projetos'
+      fullPath: '/projetos'
+      preLoaderRoute: typeof AppProjetosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/noticias': {
+      id: '/_app/noticias'
+      path: '/noticias'
+      fullPath: '/noticias'
+      preLoaderRoute: typeof AppNoticiasRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/notas': {
+      id: '/_app/notas'
+      path: '/notas'
+      fullPath: '/notas'
+      preLoaderRoute: typeof AppNotasRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/mundial': {
+      id: '/_app/mundial'
+      path: '/mundial'
+      fullPath: '/mundial'
+      preLoaderRoute: typeof AppMundialRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/links': {
+      id: '/_app/links'
+      path: '/links'
+      fullPath: '/links'
+      preLoaderRoute: typeof AppLinksRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/financas': {
+      id: '/_app/financas'
+      path: '/financas'
+      fullPath: '/financas'
+      preLoaderRoute: typeof AppFinancasRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/email': {
+      id: '/_app/email'
+      path: '/email'
+      fullPath: '/email'
+      preLoaderRoute: typeof AppEmailRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/drive': {
+      id: '/_app/drive'
+      path: '/drive'
+      fullPath: '/drive'
+      preLoaderRoute: typeof AppDriveRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/atalhos': {
+      id: '/_app/atalhos'
+      path: '/atalhos'
+      fullPath: '/atalhos'
+      preLoaderRoute: typeof AppAtalhosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/apps': {
+      id: '/_app/apps'
+      path: '/apps'
+      fullPath: '/apps'
+      preLoaderRoute: typeof AppAppsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/ai': {
+      id: '/_app/ai'
+      path: '/ai'
+      fullPath: '/ai'
+      preLoaderRoute: typeof AppAiRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/viagens/': {
+      id: '/_app/viagens/'
+      path: '/'
+      fullPath: '/viagens/'
+      preLoaderRoute: typeof AppViagensIndexRouteImport
+      parentRoute: typeof AppViagensRoute
+    }
+    '/_app/reservas/': {
+      id: '/_app/reservas/'
+      path: '/'
+      fullPath: '/reservas/'
+      preLoaderRoute: typeof AppReservasIndexRouteImport
+      parentRoute: typeof AppReservasRoute
+    }
+    '/_app/drive/': {
+      id: '/_app/drive/'
+      path: '/'
+      fullPath: '/drive/'
+      preLoaderRoute: typeof AppDriveIndexRouteImport
+      parentRoute: typeof AppDriveRoute
+    }
+    '/_app/ai/': {
+      id: '/_app/ai/'
+      path: '/'
+      fullPath: '/ai/'
+      preLoaderRoute: typeof AppAiIndexRouteImport
+      parentRoute: typeof AppAiRoute
+    }
+    '/p/viagem/$slug': {
+      id: '/p/viagem/$slug'
+      path: '/p/viagem/$slug'
+      fullPath: '/p/viagem/$slug'
+      preLoaderRoute: typeof PViagemSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/viagens/$tripId': {
+      id: '/_app/viagens/$tripId'
+      path: '/$tripId'
+      fullPath: '/viagens/$tripId'
+      preLoaderRoute: typeof AppViagensTripIdRouteImport
+      parentRoute: typeof AppViagensRoute
+    }
+    '/_app/drive/trash': {
+      id: '/_app/drive/trash'
+      path: '/trash'
+      fullPath: '/drive/trash'
+      preLoaderRoute: typeof AppDriveTrashRouteImport
+      parentRoute: typeof AppDriveRoute
+    }
+    '/_app/drive/tags': {
+      id: '/_app/drive/tags'
+      path: '/tags'
+      fullPath: '/drive/tags'
+      preLoaderRoute: typeof AppDriveTagsRouteImport
+      parentRoute: typeof AppDriveRoute
+    }
+    '/_app/drive/starred': {
+      id: '/_app/drive/starred'
+      path: '/starred'
+      fullPath: '/drive/starred'
+      preLoaderRoute: typeof AppDriveStarredRouteImport
+      parentRoute: typeof AppDriveRoute
+    }
+    '/_app/drive/recent': {
+      id: '/_app/drive/recent'
+      path: '/recent'
+      fullPath: '/drive/recent'
+      preLoaderRoute: typeof AppDriveRecentRouteImport
+      parentRoute: typeof AppDriveRoute
+    }
+    '/_app/drive/links': {
+      id: '/_app/drive/links'
+      path: '/links'
+      fullPath: '/drive/links'
+      preLoaderRoute: typeof AppDriveLinksRouteImport
+      parentRoute: typeof AppDriveRoute
+    }
+    '/_app/ai/$threadId': {
+      id: '/_app/ai/$threadId'
+      path: '/$threadId'
+      fullPath: '/ai/$threadId'
+      preLoaderRoute: typeof AppAiThreadIdRouteImport
+      parentRoute: typeof AppAiRoute
+    }
+    '/api/public/hooks/push-tick': {
+      id: '/api/public/hooks/push-tick'
+      path: '/api/public/hooks/push-tick'
+      fullPath: '/api/public/hooks/push-tick'
+      preLoaderRoute: typeof ApiPublicHooksPushTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/drive/folder/$folderId': {
+      id: '/_app/drive/folder/$folderId'
+      path: '/folder/$folderId'
+      fullPath: '/drive/folder/$folderId'
+      preLoaderRoute: typeof AppDriveFolderFolderIdRouteImport
+      parentRoute: typeof AppDriveRoute
+    }
   }
 }
 
+interface AppAiRouteChildren {
+  AppAiThreadIdRoute: typeof AppAiThreadIdRoute
+  AppAiIndexRoute: typeof AppAiIndexRoute
+}
+
+const AppAiRouteChildren: AppAiRouteChildren = {
+  AppAiThreadIdRoute: AppAiThreadIdRoute,
+  AppAiIndexRoute: AppAiIndexRoute,
+}
+
+const AppAiRouteWithChildren = AppAiRoute._addFileChildren(AppAiRouteChildren)
+
+interface AppDriveRouteChildren {
+  AppDriveLinksRoute: typeof AppDriveLinksRoute
+  AppDriveRecentRoute: typeof AppDriveRecentRoute
+  AppDriveStarredRoute: typeof AppDriveStarredRoute
+  AppDriveTagsRoute: typeof AppDriveTagsRoute
+  AppDriveTrashRoute: typeof AppDriveTrashRoute
+  AppDriveIndexRoute: typeof AppDriveIndexRoute
+  AppDriveFolderFolderIdRoute: typeof AppDriveFolderFolderIdRoute
+}
+
+const AppDriveRouteChildren: AppDriveRouteChildren = {
+  AppDriveLinksRoute: AppDriveLinksRoute,
+  AppDriveRecentRoute: AppDriveRecentRoute,
+  AppDriveStarredRoute: AppDriveStarredRoute,
+  AppDriveTagsRoute: AppDriveTagsRoute,
+  AppDriveTrashRoute: AppDriveTrashRoute,
+  AppDriveIndexRoute: AppDriveIndexRoute,
+  AppDriveFolderFolderIdRoute: AppDriveFolderFolderIdRoute,
+}
+
+const AppDriveRouteWithChildren = AppDriveRoute._addFileChildren(
+  AppDriveRouteChildren,
+)
+
+interface AppReservasRouteChildren {
+  AppReservasIndexRoute: typeof AppReservasIndexRoute
+}
+
+const AppReservasRouteChildren: AppReservasRouteChildren = {
+  AppReservasIndexRoute: AppReservasIndexRoute,
+}
+
+const AppReservasRouteWithChildren = AppReservasRoute._addFileChildren(
+  AppReservasRouteChildren,
+)
+
+interface AppViagensRouteChildren {
+  AppViagensTripIdRoute: typeof AppViagensTripIdRoute
+  AppViagensIndexRoute: typeof AppViagensIndexRoute
+}
+
+const AppViagensRouteChildren: AppViagensRouteChildren = {
+  AppViagensTripIdRoute: AppViagensTripIdRoute,
+  AppViagensIndexRoute: AppViagensIndexRoute,
+}
+
+const AppViagensRouteWithChildren = AppViagensRoute._addFileChildren(
+  AppViagensRouteChildren,
+)
+
+interface AppRouteChildren {
+  AppAiRoute: typeof AppAiRouteWithChildren
+  AppAppsRoute: typeof AppAppsRoute
+  AppAtalhosRoute: typeof AppAtalhosRoute
+  AppDashboardRoute: typeof AppDashboardRoute
+  AppDriveRoute: typeof AppDriveRouteWithChildren
+  AppEmailRoute: typeof AppEmailRoute
+  AppFinancasRoute: typeof AppFinancasRoute
+  AppLinksRoute: typeof AppLinksRoute
+  AppMundialRoute: typeof AppMundialRoute
+  AppNotasRoute: typeof AppNotasRoute
+  AppNoticiasRoute: typeof AppNoticiasRoute
+  AppProjetosRoute: typeof AppProjetosRoute
+  AppReservasRoute: typeof AppReservasRouteWithChildren
+  AppTarefasRoute: typeof AppTarefasRoute
+  AppViagensRoute: typeof AppViagensRouteWithChildren
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppAiRoute: AppAiRouteWithChildren,
+  AppAppsRoute: AppAppsRoute,
+  AppAtalhosRoute: AppAtalhosRoute,
+  AppDashboardRoute: AppDashboardRoute,
+  AppDriveRoute: AppDriveRouteWithChildren,
+  AppEmailRoute: AppEmailRoute,
+  AppFinancasRoute: AppFinancasRoute,
+  AppLinksRoute: AppLinksRoute,
+  AppMundialRoute: AppMundialRoute,
+  AppNotasRoute: AppNotasRoute,
+  AppNoticiasRoute: AppNoticiasRoute,
+  AppProjetosRoute: AppProjetosRoute,
+  AppReservasRoute: AppReservasRouteWithChildren,
+  AppTarefasRoute: AppTarefasRoute,
+  AppViagensRoute: AppViagensRouteWithChildren,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
+  AuthRoute: AuthRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  ApiChatRoute: ApiChatRoute,
+  ApiChatTravelRoute: ApiChatTravelRoute,
+  ApiMundialRoute: ApiMundialRoute,
+  ApiNewsRoute: ApiNewsRoute,
+  PViagemSlugRoute: PViagemSlugRoute,
+  ApiPublicHooksPushTickRoute: ApiPublicHooksPushTickRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,20 +1,23 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Blank App" },
-      { name: "description", content: "A simple blank page." },
-      { property: "og:title", content: "Blank App" },
-      { property: "og:description", content: "A simple blank page." },
-    ],
-  }),
   component: Index,
 });
 
 function Index() {
+  const { session, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (loading) return;
+    navigate({ to: session ? "/dashboard" : "/auth", replace: true });
+  }, [loading, session, navigate]);
+
   return (
-    <div className="min-h-screen bg-background" />
+    <div className="min-h-screen grid place-items-center">
+      <div className="neon-text text-sm tracking-widest animate-pulse">NUNO APP</div>
+    </div>
   );
 }
-
