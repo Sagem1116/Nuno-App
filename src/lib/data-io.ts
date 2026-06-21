@@ -79,6 +79,29 @@ export function pickJsonFile(): Promise<unknown | null> {
   });
 }
 
+export type JsonFilePick = { parsed: unknown; filename: string } | null;
+
+export function pickJsonFileWithName(): Promise<JsonFilePick> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return resolve(null);
+      try {
+        const text = await file.text();
+        resolve({ parsed: JSON.parse(text), filename: file.name });
+      } catch (e) {
+        toast.error("Ficheiro JSON inválido");
+        resolve(null);
+      }
+    };
+    input.click();
+  });
+}
+
+
 const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 
 export type Table =
@@ -89,6 +112,9 @@ export type Table =
   | "timer_categories"
   | "timer_sessions"
   | "activity_setup";
+
+export type ImportTable = Table | "activity_logs";
+
 
 const ALLOWED_FIELDS: Record<Table, string[]> = {
   notes: ["title", "content", "tags", "is_favorite"],
@@ -498,3 +524,28 @@ async function runGlobalAutoExport() {
     console.warn("global auto-export failed", e);
   }
 }
+
+// ---------- Import history (per table) ----------
+
+const IMPORT_KEY = "imports:v1";
+
+type ImportEntry = { table: ImportTable; filename: string; at: number };
+
+function readImports(): ImportEntry[] {
+  try { return JSON.parse(localStorage.getItem(IMPORT_KEY) || "[]"); } catch { return []; }
+}
+
+function writeImports(entries: ImportEntry[]) {
+  localStorage.setItem(IMPORT_KEY, JSON.stringify(entries.slice(0, 100)));
+}
+
+export function recordImport(table: ImportTable, filename: string) {
+  const entries = readImports();
+  entries.unshift({ table, filename, at: Date.now() });
+  writeImports(entries);
+}
+
+export function getLastImport(table: ImportTable): { filename: string; at: number } | null {
+  return readImports().find((e) => e.table === table) ?? null;
+}
+
