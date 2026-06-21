@@ -154,7 +154,7 @@ function Dashboard() {
   const visibleFavLinks = useMemo(() => favLinks.filter((l) => isInPeriod(l.created_at, periodFilter)), [favLinks, periodFilter]);
 
   const taskStats = useMemo(() => {
-    const pending = tasks.filter((t) => t.status === "pending");
+    const pending = visibleTasks.filter((t) => t.status === "pending");
     const overdue = pending.filter((t) => {
       const due = parseValidDate(t.due_date);
       return due && isPast(due) && !isToday(due);
@@ -169,41 +169,42 @@ function Dashboard() {
         return due && !isPast(due);
       })
       .slice(0, 5);
-    const doneCount = tasks.filter((t) => t.status === "done").length;
+    const doneCount = visibleTasks.filter((t) => t.status === "done").length;
     return { pending, overdue, todayTasks, upcoming, doneCount };
-  }, [tasks]);
+  }, [visibleTasks]);
 
   const monthStats = useMemo(() => {
-    const ym = format(today, "yyyy-MM");
-    const m = txs.filter((t) => t.occurred_at.startsWith(ym));
+    const m = periodFilter === "all"
+      ? visibleTxs.filter((t) => t.occurred_at.startsWith(format(today, "yyyy-MM")))
+      : visibleTxs;
     let income = 0, expense = 0;
     for (const t of m) (t.type === "income" ? (income += t.amount) : (expense += t.amount));
     const byCat = new Map<string, number>();
     m.filter((t) => t.type === "expense").forEach((t) => byCat.set(t.category, (byCat.get(t.category) ?? 0) + t.amount));
     const topCats = Array.from(byCat, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 4);
     return { income, expense, balance: income - expense, topCats, count: m.length };
-  }, [txs]);
+  }, [visibleTxs, periodFilter, today]);
 
   const tripStats = useMemo(() => {
-    const upcoming = trips
+    const upcoming = visibleTrips
       .filter((t) => {
         const start = parseValidDate(t.start_date);
         return start && start >= new Date(today.toDateString());
       })
       .slice(0, 3);
-    const active = trips.find((t) => {
+    const active = visibleTrips.find((t) => {
       const s = parseValidDate(t.start_date), e = parseValidDate(t.end_date);
       if (!s || !e) return false;
       return s <= today && today <= e;
     });
-    return { upcoming, active, total: trips.length };
-  }, [trips]);
+    return { upcoming, active, total: visibleTrips.length };
+  }, [visibleTrips, today]);
 
   const upcomingReservations = useMemo(() => {
-    return reservations
+    return visibleReservations
       .filter((r) => r.status !== "cancelled")
       .slice(0, 4);
-  }, [reservations]);
+  }, [visibleReservations]);
 
   const toggleTask = async (t: Task) => {
     const next = t.status === "done" ? "pending" : "done";
