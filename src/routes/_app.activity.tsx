@@ -91,8 +91,7 @@ function ActivityPage() {
       <Tabs defaultValue="dashboard" className="w-full">
         <TabsList>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="unclassified">Não classificados</TabsTrigger>
-          <TabsTrigger value="last-import">Último import</TabsTrigger>
+          <TabsTrigger value="unclassified">Por classificar</TabsTrigger>
           <TabsTrigger value="rules">Regras</TabsTrigger>
           <TabsTrigger value="meta">Categorias & Projetos</TabsTrigger>
           <TabsTrigger value="import">Importar</TabsTrigger>
@@ -102,10 +101,7 @@ function ActivityPage() {
           <DashboardTab logs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} />
         </TabsContent>
         <TabsContent value="unclassified" className="mt-4">
-          <UnclassifiedTab uid={uid!} logs={(logs.data ?? []).filter(l => !l.category_id)} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_logs"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
-        </TabsContent>
-        <TabsContent value="last-import" className="mt-4">
-          <LastImportUnclassifiedTab uid={uid!} allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_logs"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
+          <UnclassifiedTab uid={uid!} allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_logs"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
         </TabsContent>
         <TabsContent value="rules" className="mt-4">
           <RulesTab uid={uid!} rules={rules.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => qc.invalidateQueries({ queryKey: ["activity_rules"] })} />
@@ -318,53 +314,89 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
 
 // ---------- Unclassified ----------
 
-function UnclassifiedTab({ uid, logs, cats, projs, onChanged }: { uid: string; logs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
-  // Group by app_name for batch classification
+type Scope = "last-import" | "7d" | "30d" | "all";
+
+function UnclassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string; allLogs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
+  const lastInfo = getLastImport("activity_logs");
+  const lastIds = useMemo(() => new Set(getLastImportIds("activity_logs")), [allLogs.length]);
+  const [scope, setScope] = useState<Scope>(lastIds.size ? "last-import" : "7d");
+  const [search, setSearch] = useState("");
+  const [visibleCount, setVisibleCount] = useState(20);
+
+  const scoped = useMemo(() => {
+    const unclassified = allLogs.filter(l => !l.category_id);
+    if (scope === "last-import") {
+      return unclassified.filter(l => l.external_id && lastIds.has(l.external_id));
+    }
+    if (scope === "all") return unclassified;
+    const days = scope === "7d" ? 7 : 30;
+    const cutoff = Date.now() - days * 86400_000;
+    return unclassified.filter(l => new Date(l.start_time).getTime() >= cutoff);
+  }, [allLogs, scope, lastIds]);
+
   const groups = useMemo(() => {
     const m = new Map<string, { app: string; total: number; entries: Log[] }>();
-    for (const l of logs) {
+    for (const l of scoped) {
       const k = l.app_name || "—";
       const g = m.get(k) ?? { app: k, total: 0, entries: [] };
       g.total += l.duration_seconds;
       g.entries.push(l);
       m.set(k, g);
     }
-    return Array.from(m.values())
+    const arr = Array.from(m.values())
       .map(g => ({ ...g, entries: g.entries.sort((a, b) => b.duration_seconds - a.duration_seconds) }))
       .sort((a, b) => b.total - a.total);
-  }, [logs]);
+    const q = search.trim().toLowerCase();
+    return q ? arr.filter(g => g.app.toLowerCase().includes(q)) : arr;
+  }, [scoped, search]);
 
-  if (!logs.length) return <div className="text-sm text-muted-foreground">Não há atividades por classificar 🎉</div>;
+  const totalSec = useMemo(() => scoped.reduce((a, l) => a + l.duration_seconds, 0), [scoped]);
+  const visible = groups.slice(0, visibleCount);
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">{logs.length} atividade(s) sem categoria, agrupadas por aplicação.</p>
-      {groups.map(g => (
-        <UnclassifiedRow key={g.app} uid={uid} app={g.app} totalSec={g.total} entries={g.entries} cats={cats} projs={projs} onChanged={onChanged} />
-      ))}
-    </div>
-  );
-}
-
-function LastImportUnclassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string; allLogs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
-  const lastInfo = getLastImport("activity_logs");
-  const ids = useMemo(() => new Set(getLastImportIds("activity_logs")), [allLogs.length]);
-  const logs = useMemo(
-    () => allLogs.filter(l => !l.category_id && l.external_id && ids.has(l.external_id)),
-    [allLogs, ids],
-  );
-  if (!ids.size) return <div className="text-sm text-muted-foreground">Ainda não há registo do último import nesta sessão.</div>;
-  return (
-    <div className="space-y-3">
-      {lastInfo && (
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={scope} onValueChange={(v) => { setScope(v as Scope); setVisibleCount(20); }}>
+          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="last-import" disabled={!lastIds.size}>Último import {lastIds.size ? `(${lastIds.size})` : ""}</SelectItem>
+            <SelectItem value="7d">Últimos 7 dias</SelectItem>
+            <SelectItem value="30d">Últimos 30 dias</SelectItem>
+            <SelectItem value="all">Tudo</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input placeholder="Filtrar por aplicação…" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(20); }} className="w-64" />
+        <div className="text-xs text-muted-foreground ml-auto">
+          {scoped.length} evento(s) • {groups.length} app(s) • {fmtDuration(totalSec)}
+        </div>
+      </div>
+      {scope === "last-import" && lastInfo && (
         <div className="text-xs text-muted-foreground">
-          Último import: <span className="font-medium text-foreground">{lastInfo.filename}</span> em {new Date(lastInfo.at).toLocaleString()} · {ids.size} evento(s) no ficheiro
+          Último import: <span className="font-medium text-foreground">{lastInfo.filename}</span> em {new Date(lastInfo.at).toLocaleString()}
         </div>
       )}
-      <UnclassifiedTab uid={uid} logs={logs} cats={cats} projs={projs} onChanged={onChanged} />
+      {!groups.length ? (
+        <div className="text-sm text-muted-foreground">
+          {scoped.length ? "Nenhuma aplicação corresponde ao filtro." : "Não há atividades por classificar neste período 🎉"}
+        </div>
+      ) : (
+        <>
+          {visible.map(g => (
+            <UnclassifiedRow key={g.app} uid={uid} app={g.app} totalSec={g.total} entries={g.entries} cats={cats} projs={projs} onChanged={onChanged} />
+          ))}
+          {groups.length > visible.length && (
+            <div className="flex justify-center pt-2">
+              <Button variant="outline" size="sm" onClick={() => setVisibleCount(c => c + 20)}>
+                Mostrar mais ({groups.length - visible.length} restantes)
+              </Button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
+
 
 function UnclassifiedRow({ uid, app, totalSec, entries, cats, projs, onChanged }: {
   uid: string; app: string; totalSec: number; entries: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void;
