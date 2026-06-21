@@ -206,8 +206,8 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Card><CardContent className="pt-6"><div className="text-xs text-muted-foreground">Total</div><div className="text-2xl font-semibold">{fmtHours(total)}</div></CardContent></Card>
-        <Card><CardContent className="pt-6"><div className="text-xs text-muted-foreground">Não classificado</div><div className="text-2xl font-semibold">{fmtHours(unclassified)}</div></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="text-xs text-muted-foreground">Total</div><div className="text-2xl font-semibold">{fmtDuration(total)}</div></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="text-xs text-muted-foreground">Não classificado</div><div className="text-2xl font-semibold">{fmtDuration(unclassified)}</div></CardContent></Card>
         <Card><CardContent className="pt-6"><div className="text-xs text-muted-foreground">Atividades</div><div className="text-2xl font-semibold">{filtered.length}</div></CardContent></Card>
       </div>
 
