@@ -126,7 +126,7 @@ function CronometroPage() {
     queryFn: async (): Promise<DbSession[]> => {
       const { data, error } = await supabase
         .from("timer_sessions")
-        .select("id,category_id,note,started_at,ended_at")
+        .select("id,category_id,note,started_at,ended_at,reminders_minutes")
         .order("started_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -187,6 +187,10 @@ function CronometroPage() {
   const [tickNow, setTickNow] = useState(Date.now());
   const [pickerCatId, setPickerCatId] = useState<string>("");
   const [pickerNote, setPickerNote] = useState("");
+  const [pickerReminders, setPickerReminders] = useState<number[]>(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(window.localStorage.getItem("cron-reminder-last") || "[]"); } catch { return []; }
+  });
   const [catManagerOpen, setCatManagerOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<Session | null>(null);
   const [period, setPeriod] = useState<Period>("week");
@@ -212,8 +216,12 @@ function CronometroPage() {
         note: pickerNote.trim() || null,
         started_at: new Date().toISOString(),
         ended_at: null,
+        reminders_minutes: pickerReminders,
       });
       if (error) throw error;
+      try {
+        window.localStorage.setItem("cron-reminder-last", JSON.stringify(pickerReminders));
+      } catch {}
     },
     onSuccess: () => {
       setPickerNote("");
