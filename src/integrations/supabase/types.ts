@@ -20,6 +20,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          parent_id: string | null
           updated_at: string
           user_id: string
         }
@@ -28,6 +29,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          parent_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -36,10 +38,19 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          parent_id?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "activity_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "activity_categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       activity_logs: {
         Row: {

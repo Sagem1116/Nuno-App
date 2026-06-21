@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_app/activity")({
   component: ActivityPage,
 });
 
-type Category = { id: string; name: string; color: string };
+type Category = { id: string; name: string; color: string; parent_id?: string | null };
 type Project = { id: string; name: string; color: string };
 type Rule = {
   id: string; rule_type: "app_name" | "window_title_contains";
@@ -120,8 +120,15 @@ function ActivityPage() {
 
 function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; projs: Project[] }) {
   const [period, setPeriod] = useState<string>("30");
-  const [catFilter, setCatFilter] = useState<string>("all");
+  const [parentCatFilter, setParentCatFilter] = useState<string>("all");
+  const [subCatFilter, setSubCatFilter] = useState<string>("all");
   const [projFilter, setProjFilter] = useState<string>("all");
+
+  const parents = useMemo(() => cats.filter(c => !c.parent_id), [cats]);
+  const subsOfSelected = useMemo(
+    () => (parentCatFilter === "all" || parentCatFilter === "none" ? [] : cats.filter(c => c.parent_id === parentCatFilter)),
+    [cats, parentCatFilter]
+  );
 
   const range = useMemo(() => {
     const now = new Date();
@@ -132,15 +139,25 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     return { from: Date.now() - days * 24 * 3600 * 1000, to: Infinity };
   }, [period]);
 
+  const matchesCatFilter = (logCatId: string | null) => {
+    if (parentCatFilter === "all") return true;
+    if (parentCatFilter === "none") return !logCatId;
+    if (!logCatId) return false;
+    if (subCatFilter !== "all") return logCatId === subCatFilter;
+    // include parent itself + all its subs
+    const subIds = cats.filter(c => c.parent_id === parentCatFilter).map(c => c.id);
+    return logCatId === parentCatFilter || subIds.includes(logCatId);
+  };
+
   const filtered = useMemo(() => {
     return logs.filter(l => {
       const t = new Date(l.start_time).getTime();
       if (t < range.from || t >= range.to) return false;
-      if (catFilter !== "all" && (l.category_id ?? "none") !== catFilter) return false;
+      if (!matchesCatFilter(l.category_id)) return false;
       if (projFilter !== "all" && (l.project_id ?? "none") !== projFilter) return false;
       return true;
     });
-  }, [logs, range, catFilter, projFilter]);
+  }, [logs, range, parentCatFilter, subCatFilter, projFilter, cats]);
 
   const total = filtered.reduce((a, l) => a + l.duration_seconds, 0);
   const unclassified = filtered.filter(l => !l.category_id).reduce((a, l) => a + l.duration_seconds, 0);
@@ -197,14 +214,23 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             <SelectItem value="365">Último ano</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={catFilter} onValueChange={setCatFilter}>
+        <Select value={parentCatFilter} onValueChange={(v) => { setParentCatFilter(v); setSubCatFilter("all"); }}>
           <SelectTrigger className="w-48"><SelectValue placeholder="Categoria" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as categorias</SelectItem>
             <SelectItem value="none">Não classificado</SelectItem>
-            {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            {parents.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
+        {subsOfSelected.length > 0 && (
+          <Select value={subCatFilter} onValueChange={setSubCatFilter}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Subcategoria" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as subcategorias</SelectItem>
+              {subsOfSelected.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
         <Select value={projFilter} onValueChange={setProjFilter}>
           <SelectTrigger className="w-48"><SelectValue placeholder="Projeto" /></SelectTrigger>
           <SelectContent>
@@ -290,16 +316,17 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
 function UnclassifiedTab({ uid, logs, cats, projs, onChanged }: { uid: string; logs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
   // Group by app_name for batch classification
   const groups = useMemo(() => {
-    const m = new Map<string, { app: string; titles: Set<string>; total: number; ids: string[] }>();
+    const m = new Map<string, { app: string; total: number; entries: Log[] }>();
     for (const l of logs) {
       const k = l.app_name || "—";
-      const g = m.get(k) ?? { app: k, titles: new Set(), total: 0, ids: [] };
-      g.titles.add(l.window_title);
+      const g = m.get(k) ?? { app: k, total: 0, entries: [] };
       g.total += l.duration_seconds;
-      g.ids.push(l.id);
+      g.entries.push(l);
       m.set(k, g);
     }
-    return Array.from(m.values()).sort((a, b) => b.total - a.total);
+    return Array.from(m.values())
+      .map(g => ({ ...g, entries: g.entries.sort((a, b) => b.duration_seconds - a.duration_seconds) }))
+      .sort((a, b) => b.total - a.total);
   }, [logs]);
 
   if (!logs.length) return <div className="text-sm text-muted-foreground">Não há atividades por classificar 🎉</div>;
@@ -308,14 +335,14 @@ function UnclassifiedTab({ uid, logs, cats, projs, onChanged }: { uid: string; l
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{logs.length} atividade(s) sem categoria, agrupadas por aplicação.</p>
       {groups.map(g => (
-        <UnclassifiedRow key={g.app} uid={uid} app={g.app} totalSec={g.total} titles={Array.from(g.titles).slice(0, 5)} ids={g.ids} cats={cats} projs={projs} onChanged={onChanged} />
+        <UnclassifiedRow key={g.app} uid={uid} app={g.app} totalSec={g.total} entries={g.entries} cats={cats} projs={projs} onChanged={onChanged} />
       ))}
     </div>
   );
 }
 
-function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChanged }: {
-  uid: string; app: string; totalSec: number; titles: string[]; ids: string[]; cats: Category[]; projs: Project[]; onChanged: () => void;
+function UnclassifiedRow({ uid, app, totalSec, entries, cats, projs, onChanged }: {
+  uid: string; app: string; totalSec: number; entries: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void;
 }) {
   const [catId, setCatId] = useState<string>("");
   const [projId, setProjId] = useState<string>("");
@@ -323,8 +350,9 @@ function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChang
   const [ruleType, setRuleType] = useState<"app_name" | "window_title_contains">("app_name");
   const [pattern, setPattern] = useState<string>(app);
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-  async function apply() {
+  async function applyTo(ids: string[], makeRuleNow: boolean) {
     if (!catId) { toast.error("Escolhe uma categoria"); return; }
     setBusy(true);
     try {
@@ -332,7 +360,7 @@ function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChang
       if (projId && projId !== "__none__") patch.project_id = projId;
       const { error } = await supabase.from("activity_logs").update(patch).in("id", ids);
       if (error) throw error;
-      if (makeRule && pattern.trim()) {
+      if (makeRuleNow && pattern.trim()) {
         const { error: rErr } = await supabase.from("activity_rules").insert({
           user_id: uid, rule_type: ruleType, pattern: pattern.trim(),
           category_id: catId, project_id: projId && projId !== "__none__" ? projId : null,
@@ -352,19 +380,17 @@ function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChang
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="font-medium">{app}</div>
-            <div className="text-xs text-muted-foreground">{ids.length} registo(s) • {fmtDuration(totalSec)}</div>
+            <div className="text-xs text-muted-foreground">{entries.length} registo(s) • {fmtDuration(totalSec)}</div>
           </div>
+          <Button variant="ghost" size="sm" onClick={() => setExpanded(v => !v)}>
+            {expanded ? "Ocultar entradas" : "Ver entradas"}
+          </Button>
         </div>
-        {titles.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {titles.map((t, i) => <Badge key={i} variant="secondary" className="font-normal text-xs max-w-xs truncate">{t || "(sem título)"}</Badge>)}
-          </div>
-        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <Select value={catId} onValueChange={setCatId}>
             <SelectTrigger><SelectValue placeholder="Categoria" /></SelectTrigger>
             <SelectContent>
-              {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.parent_id ? "↳ " : ""}{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={projId} onValueChange={setProjId}>
@@ -392,8 +418,25 @@ function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChang
               <Input value={pattern} onChange={(e) => setPattern(e.target.value)} className="w-64" placeholder="padrão" />
             </>
           )}
-          <Button size="sm" onClick={apply} disabled={busy}><Wand2 className="h-4 w-4 mr-1" /> Aplicar</Button>
+          <Button size="sm" onClick={() => applyTo(entries.map(e => e.id), makeRule)} disabled={busy}>
+            <Wand2 className="h-4 w-4 mr-1" /> Aplicar a todos ({entries.length})
+          </Button>
         </div>
+        {expanded && (
+          <div className="space-y-1 border-t border-border pt-2 max-h-80 overflow-y-auto">
+            {entries.map(e => (
+              <div key={e.id} className="flex items-center justify-between gap-2 text-xs py-1 px-2 rounded hover:bg-accent/50">
+                <div className="flex-1 min-w-0">
+                  <div className="truncate">{e.window_title || "(sem título)"}</div>
+                  <div className="text-muted-foreground">{new Date(e.start_time).toLocaleString()} • {fmtDuration(e.duration_seconds)}</div>
+                </div>
+                <Button size="sm" variant="outline" disabled={busy || !catId} onClick={() => applyTo([e.id], false)}>
+                  Classificar
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -500,15 +543,72 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
 function MetaTab({ uid, cats, projs, onChanged }: { uid: string; cats: Category[]; projs: Project[]; onChanged: () => void }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <MetaList title="Categorias" items={cats} table="activity_categories" uid={uid} onChanged={onChanged} defaultColor="#6366f1" />
+      <CategoriesList cats={cats} uid={uid} onChanged={onChanged} />
       <MetaList title="Projetos" items={projs} table="activity_projects" uid={uid} onChanged={onChanged} defaultColor="#10b981" />
     </div>
   );
 }
 
+function CategoriesList({ cats, uid, onChanged }: { cats: Category[]; uid: string; onChanged: () => void }) {
+  const [name, setName] = useState("");
+  const [color, setColor] = useState("#6366f1");
+  const [parentId, setParentId] = useState<string>("__none__");
+  const parents = useMemo(() => cats.filter(c => !c.parent_id), [cats]);
+
+  async function add() {
+    if (!name.trim()) return;
+    const payload: any = { user_id: uid, name: name.trim(), color };
+    if (parentId && parentId !== "__none__") payload.parent_id = parentId;
+    const { error } = await supabase.from("activity_categories").insert(payload);
+    if (error) { toast.error(error.message); return; }
+    setName(""); setParentId("__none__"); onChanged();
+  }
+  async function del(id: string) {
+    const { error } = await supabase.from("activity_categories").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    onChanged();
+  }
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Categorias</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <Input placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} className="flex-1 min-w-40" />
+          <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded border border-input bg-transparent" />
+          <Select value={parentId} onValueChange={setParentId}>
+            <SelectTrigger className="w-40"><SelectValue placeholder="Categoria-mãe" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Sem mãe</SelectItem>
+              {parents.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button size="sm" onClick={add}><Plus className="h-4 w-4" /></Button>
+        </div>
+        <div className="space-y-1">
+          {parents.map(p => (
+            <div key={p.id}>
+              <div className="flex items-center justify-between p-2 rounded border border-border">
+                <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: p.color }} />{p.name}</div>
+                <Button variant="ghost" size="icon" onClick={() => del(p.id)}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+              {cats.filter(c => c.parent_id === p.id).map(s => (
+                <div key={s.id} className="flex items-center justify-between p-2 ml-6 rounded border border-border mt-1">
+                  <div className="flex items-center gap-2 text-sm"><span className="text-muted-foreground">↳</span><span className="h-3 w-3 rounded-full" style={{ backgroundColor: s.color }} />{s.name}</div>
+                  <Button variant="ghost" size="icon" onClick={() => del(s.id)}><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              ))}
+            </div>
+          ))}
+          {!parents.length && <div className="text-sm text-muted-foreground">Vazio.</div>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function MetaList({ title, items, table, uid, onChanged, defaultColor }: {
   title: string; items: { id: string; name: string; color: string }[];
-  table: "activity_categories" | "activity_projects"; uid: string; onChanged: () => void; defaultColor: string;
+  table: "activity_projects"; uid: string; onChanged: () => void; defaultColor: string;
 }) {
   const [name, setName] = useState("");
   const [color, setColor] = useState(defaultColor);
