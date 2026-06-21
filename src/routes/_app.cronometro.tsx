@@ -213,6 +213,8 @@ function CronometroPage() {
   const [period, setPeriod] = useState<Period>("week");
   const [refDate, setRefDate] = useState<Date>(new Date());
   const [breakdownMode, setBreakdownMode] = useState<"parent" | "sub">("parent");
+  const [parentFilter, setParentFilter] = useState<string>("all");
+  const [subFilter, setSubFilter] = useState<string>("all");
 
   const parentCats = useMemo(() => cats.filter((c) => !c.parentId), [cats]);
   const subCatsOf = (pid: string) => cats.filter((c) => c.parentId === pid);
