@@ -149,7 +149,11 @@ export async function importTable(table: Table, userId: string) {
   toast.success(`${rows.length} item(s) importados`);
 }
 
-async function replaceMatchingTimerSessions(rows: Record<string, unknown>[], userId: string) {
+type TimerSessionImportResult =
+  | { ok: true; inserted: number; replaced: number }
+  | { ok: false; error: string; inserted: number; replaced: number };
+
+async function replaceMatchingTimerSessions(rows: Record<string, unknown>[], userId: string): Promise<TimerSessionImportResult> {
   const validRows = rows.filter((s) => s.started_at && s.ended_at);
   if (!validRows.length) return { ok: true, inserted: 0, replaced: 0 };
   const timestampKey = (value: unknown) => {
