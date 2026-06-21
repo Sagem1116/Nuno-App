@@ -214,14 +214,23 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             <SelectItem value="365">Último ano</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={catFilter} onValueChange={setCatFilter}>
+        <Select value={parentCatFilter} onValueChange={(v) => { setParentCatFilter(v); setSubCatFilter("all"); }}>
           <SelectTrigger className="w-48"><SelectValue placeholder="Categoria" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as categorias</SelectItem>
             <SelectItem value="none">Não classificado</SelectItem>
-            {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            {parents.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
+        {subsOfSelected.length > 0 && (
+          <Select value={subCatFilter} onValueChange={setSubCatFilter}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Subcategoria" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as subcategorias</SelectItem>
+              {subsOfSelected.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
         <Select value={projFilter} onValueChange={setProjFilter}>
           <SelectTrigger className="w-48"><SelectValue placeholder="Projeto" /></SelectTrigger>
           <SelectContent>
