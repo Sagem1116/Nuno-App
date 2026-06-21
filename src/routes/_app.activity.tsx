@@ -172,7 +172,7 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     }
     return Array.from(m.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, sec]) => ({ date: date.slice(5), hours: +(sec / 3600).toFixed(2) }));
+      .map(([date, sec]) => ({ date: date.slice(5), seconds: sec }));
   }, [filtered]);
 
   return (
