@@ -1,11 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
-import { Plus, Trash2, FileUp, AlertCircle, Loader } from "lucide-react";
+import { Plus, Trash2, AlertCircle, Loader } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { inputCls } from "./_app.notas";
-import { extractReservation } from "@/lib/reservations.functions";
 
 export const Route = createFileRoute("/_app/reservas/")({
   component: ReservasPage,
