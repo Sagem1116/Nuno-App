@@ -447,6 +447,12 @@ function CronometroPage() {
                 categoryName={activeCat?.name ?? "—"}
                 categoryColor={activeCat?.color ?? "#888"}
                 note={activeDb.note ?? ""}
+                reminders={activeDb.reminders_minutes ?? []}
+                onRemindersChange={async (rs) => {
+                  await supabase.from("timer_sessions").update({ reminders_minutes: rs }).eq("id", activeDb.id);
+                  qc.invalidateQueries({ queryKey: ["timer-sessions", user?.id] });
+                  try { window.localStorage.setItem("cron-reminder-last", JSON.stringify(rs)); } catch {}
+                }}
                 onStop={() => stopMut.mutate()}
               />
             </div>
@@ -484,6 +490,12 @@ function CronometroPage() {
                     if (e.key === "Enter") startMut.mutate();
                   }}
                 />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                  Lembretes (notificação após o início) · podes escolher vários
+                </label>
+                <RemindersPicker value={pickerReminders} onChange={setPickerReminders} />
               </div>
             </div>
             <button
