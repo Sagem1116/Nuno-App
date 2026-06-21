@@ -179,17 +179,22 @@ function CronometroPage() {
         .filter((s) => s.ended_at)
         .map((s) => {
           const cat = s.category_id ? catById.get(s.category_id) : undefined;
+          const parent = cat?.parentId ? catById.get(cat.parentId) : cat;
           const startedAt = Date.parse(s.started_at);
           const endedAt = Date.parse(s.ended_at!);
+          const pausedMs = s.paused_ms ?? 0;
           return {
             id: s.id,
             categoryId: s.category_id ?? "",
             categoryName: cat?.name ?? "—",
             categoryColor: cat?.color ?? "#888",
+            parentId: cat?.parentId ?? cat?.id ?? null,
+            parentName: parent?.name ?? cat?.name ?? "—",
+            parentColor: parent?.color ?? cat?.color ?? "#888",
             note: s.note ?? "",
             startedAt,
             endedAt,
-            durationSeconds: Math.max(1, Math.round((endedAt - startedAt) / 1000)),
+            durationSeconds: Math.max(1, Math.round((endedAt - startedAt - pausedMs) / 1000)),
           };
         }),
     [rawSessions, catById],
