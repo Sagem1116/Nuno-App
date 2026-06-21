@@ -599,7 +599,7 @@ function Dashboard() {
         </Panel>
 
         {/* Viagens */}
-        <Panel title="Viagens" icon={Plane} to="/viagens">
+        <Panel title={periodFilter === "all" ? "Viagens" : periodFilter === "today" ? "Viagens hoje" : "Viagens ontem"} icon={Plane} to="/viagens">
           {tripStats.active && (
             <div className="mb-3 px-3 py-2 rounded-md border border-primary/40 bg-primary/10">
               <div className="text-xs text-primary">Em curso</div>
@@ -607,7 +607,7 @@ function Dashboard() {
             </div>
           )}
           {tripStats.upcoming.length === 0 && !tripStats.active ? (
-            <Empty text="Sem viagens planeadas" />
+            <Empty text={periodFilter === "all" ? "Sem viagens planeadas" : "Sem viagens"} />
           ) : (
             <ul className="space-y-2">
               {tripStats.upcoming.map((t) => (
@@ -631,7 +631,7 @@ function Dashboard() {
         </Panel>
 
         {/* Reservas */}
-        <Panel title="Reservas recentes" icon={Ticket} to="/reservas">
+        <Panel title={periodFilter === "all" ? "Reservas recentes" : periodFilter === "today" ? "Reservas hoje" : "Reservas ontem"} icon={Ticket} to="/reservas">
           {upcomingReservations.length === 0 ? (
             <Empty text="Sem reservas" />
           ) : (
@@ -650,10 +650,10 @@ function Dashboard() {
         </Panel>
 
         {/* Notas */}
-        <Panel title="Notas recentes" icon={StickyNote} to="/notas">
-          {notes.length === 0 ? <Empty text="Sem notas" /> : (
+        <Panel title={periodFilter === "all" ? "Notas recentes" : periodFilter === "today" ? "Notas de hoje" : "Notas de ontem"} icon={StickyNote} to="/notas">
+          {visibleNotes.length === 0 ? <Empty text="Sem notas" /> : (
             <ul className="space-y-1">
-              {notes.map((n) => (
+              {visibleNotes.map((n) => (
                 <li key={n.id} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-accent/40 text-sm">
                   <span className="truncate">{n.title || "Sem título"}</span>
                   <span className="text-xs text-muted-foreground shrink-0">{fmtDate(n.created_at, "d MMM")}</span>
@@ -664,10 +664,10 @@ function Dashboard() {
         </Panel>
 
         {/* Links */}
-        <Panel title="Links recentes" icon={Link2} to="/links">
-          {links.length === 0 ? <Empty text="Sem links" /> : (
+        <Panel title={periodFilter === "all" ? "Links recentes" : periodFilter === "today" ? "Links de hoje" : "Links de ontem"} icon={Link2} to="/links">
+          {visibleLinks.length === 0 ? <Empty text="Sem links" /> : (
             <ul className="space-y-1">
-              {links.map((l) => (
+              {visibleLinks.map((l) => (
                 <li key={l.id} className="px-2 py-1.5 rounded-md hover:bg-accent/40">
                   <a href={l.url} target="_blank" rel="noreferrer" className="text-sm truncate block">
                     {l.title || l.url}
