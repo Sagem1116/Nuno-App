@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_app/activity")({
   component: ActivityPage,
 });
 
-type Category = { id: string; name: string; color: string };
+type Category = { id: string; name: string; color: string; parent_id?: string | null };
 type Project = { id: string; name: string; color: string };
 type Rule = {
   id: string; rule_type: "app_name" | "window_title_contains";
