@@ -348,11 +348,11 @@ function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel title="Notas favoritas" icon={Star} to="/notas">
-          {favNotes.length === 0 ? (
+          {visibleFavNotes.length === 0 ? (
             <Empty text="Sem notas nos favoritos" />
           ) : (
             <ul className="space-y-1">
-              {favNotes.map((n) => (
+              {visibleFavNotes.map((n) => (
                 <li key={n.id}>
                   <button
                     onClick={() => setViewingNote(n)}
@@ -369,11 +369,11 @@ function Dashboard() {
         </Panel>
 
         <Panel title="Links favoritos" icon={Star} to="/links">
-          {favLinks.length === 0 ? (
+          {visibleFavLinks.length === 0 ? (
             <Empty text="Sem links nos favoritos" />
           ) : (
             <ul className="space-y-1">
-              {favLinks.map((l) => (
+              {visibleFavLinks.map((l) => (
                 <li key={l.id}>
                   <a
                     href={l.url}
