@@ -13,7 +13,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useNativeTimerMirror } from "@/lib/native-timer-mirror";
-import { downloadJson, pickJsonFile } from "@/lib/data-io";
+import { downloadJson, importHierarchicalCategories, pickJsonFile } from "@/lib/data-io";
 import { toast } from "sonner";
 import {
   Table,
@@ -542,25 +542,11 @@ function CronometroPage() {
               if (!parsed) return;
               const cats: any[] = Array.isArray(parsed?.categories) ? parsed.categories : [];
               const sess: any[] = Array.isArray(parsed?.sessions) ? parsed.sessions : [];
-              const idMap = new Map<string, string>();
+              let idMap = new Map<string, string>();
               if (cats.length) {
-                // Map by name to existing categories first
-                const existing = catsQuery.data ?? [];
-                const byName = new Map(existing.map((c) => [c.name.toLowerCase(), c.id]));
-                const toInsert = cats.filter((c) => !byName.has(String(c.name ?? "").toLowerCase()));
-                let inserted: any[] = [];
-                if (toInsert.length) {
-                  const rows = toInsert.map((c) => ({
-                    user_id: user.id, name: c.name, color: c.color ?? "#888",
-                  }));
-                  const { data } = await supabase.from("timer_categories").insert(rows).select("id,name");
-                  inserted = data ?? [];
-                }
-                for (const c of cats) {
-                  const newId = byName.get(String(c.name ?? "").toLowerCase())
-                    ?? inserted.find((x) => x.name === c.name)?.id;
-                  if (c.id && newId) idMap.set(c.id, newId);
-                }
+                const result = await importHierarchicalCategories("timer_categories", cats, user.id);
+                idMap = result.idMap;
+                if (result.skipped) toast.warning(`${result.skipped} subcategoria(s) ignoradas por falta da categoria-mãe`);
               }
               if (sess.length) {
                 const rows = sess.map((s) => ({
