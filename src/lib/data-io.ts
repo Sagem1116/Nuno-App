@@ -40,8 +40,8 @@ const ALLOWED_FIELDS: Record<Table, string[]> = {
   links: ["title", "url", "description", "tags", "is_favorite"],
   transactions: ["amount", "type", "category", "description", "occurred_at"],
   tasks: ["title", "description", "priority", "due_date", "status"],
-  timer_categories: ["name", "color"],
-  timer_sessions: ["category_id", "note", "started_at", "ended_at", "reminders_minutes"],
+  timer_categories: ["name", "color", "parent_id"],
+  timer_sessions: ["category_id", "note", "started_at", "ended_at", "reminders_minutes", "paused_at", "paused_ms"],
 };
 
 export async function exportTable(table: Table, opts?: { silent?: boolean }) {

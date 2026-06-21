@@ -497,6 +497,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          parent_id: string | null
           updated_at: string
           user_id: string
         }
@@ -505,6 +506,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          parent_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -513,10 +515,19 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          parent_id?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "timer_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "timer_categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       timer_sessions: {
         Row: {
@@ -525,6 +536,8 @@ export type Database = {
           ended_at: string | null
           id: string
           note: string | null
+          paused_at: string | null
+          paused_ms: number
           reminders_minutes: number[]
           started_at: string
           updated_at: string
@@ -536,6 +549,8 @@ export type Database = {
           ended_at?: string | null
           id?: string
           note?: string | null
+          paused_at?: string | null
+          paused_ms?: number
           reminders_minutes?: number[]
           started_at: string
           updated_at?: string
@@ -547,6 +562,8 @@ export type Database = {
           ended_at?: string | null
           id?: string
           note?: string | null
+          paused_at?: string | null
+          paused_ms?: number
           reminders_minutes?: number[]
           started_at?: string
           updated_at?: string

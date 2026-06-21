@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Play, Square, Plus, Pencil, Trash2, X, Timer, Tags as TagsIcon, Loader2,
-  PictureInPicture2, Bell, BellOff, Download, Upload,
+  PictureInPicture2, Bell, BellOff, Download, Upload, Pause, ChevronRight,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -24,6 +24,7 @@ interface Cat {
   id: string;
   name: string;
   color: string;
+  parentId: string | null;
 }
 interface DbSession {
   id: string;
@@ -32,19 +33,24 @@ interface DbSession {
   started_at: string;
   ended_at: string | null;
   reminders_minutes?: number[] | null;
+  paused_at?: string | null;
+  paused_ms?: number | null;
 }
 interface Session {
   id: string;
   categoryId: string;
   categoryName: string;
   categoryColor: string;
+  parentId: string | null;
+  parentName: string;
+  parentColor: string;
   note: string;
   startedAt: number;
   endedAt: number;
   durationSeconds: number;
 }
 
-const DEFAULT_CATS: Array<Omit<Cat, "id">> = [
+const DEFAULT_CATS: Array<{ name: string; color: string }> = [
   { name: "Trabalho", color: "#ff7a18" },
   { name: "Estudo", color: "#60a5fa" },
   { name: "Exercício", color: "#34d399" },
@@ -106,19 +112,21 @@ function CronometroPage() {
     queryFn: async (): Promise<Cat[]> => {
       const { data, error } = await supabase
         .from("timer_categories")
-        .select("id,name,color")
+        .select("id,name,color,parent_id")
         .order("created_at", { ascending: true });
       if (error) throw error;
+      const mapRow = (r: { id: string; name: string; color: string; parent_id: string | null }): Cat =>
+        ({ id: r.id, name: r.name, color: r.color, parentId: r.parent_id });
       if (!data || data.length === 0) {
         const seeded = DEFAULT_CATS.map((c) => ({ ...c, user_id: user!.id }));
         const { data: inserted, error: e2 } = await supabase
           .from("timer_categories")
           .insert(seeded)
-          .select("id,name,color");
+          .select("id,name,color,parent_id");
         if (e2) throw e2;
-        return inserted ?? [];
+        return (inserted ?? []).map(mapRow);
       }
-      return data;
+      return data.map(mapRow);
     },
     refetchOnWindowFocus: true,
   });
@@ -129,7 +137,7 @@ function CronometroPage() {
     queryFn: async (): Promise<DbSession[]> => {
       const { data, error } = await supabase
         .from("timer_sessions")
-        .select("id,category_id,note,started_at,ended_at,reminders_minutes")
+        .select("id,category_id,note,started_at,ended_at,reminders_minutes,paused_at,paused_ms")
         .order("started_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -171,23 +179,29 @@ function CronometroPage() {
         .filter((s) => s.ended_at)
         .map((s) => {
           const cat = s.category_id ? catById.get(s.category_id) : undefined;
+          const parent = cat?.parentId ? catById.get(cat.parentId) : cat;
           const startedAt = Date.parse(s.started_at);
           const endedAt = Date.parse(s.ended_at!);
+          const pausedMs = s.paused_ms ?? 0;
           return {
             id: s.id,
             categoryId: s.category_id ?? "",
             categoryName: cat?.name ?? "—",
             categoryColor: cat?.color ?? "#888",
+            parentId: cat?.parentId ?? cat?.id ?? null,
+            parentName: parent?.name ?? cat?.name ?? "—",
+            parentColor: parent?.color ?? cat?.color ?? "#888",
             note: s.note ?? "",
             startedAt,
             endedAt,
-            durationSeconds: Math.max(1, Math.round((endedAt - startedAt) / 1000)),
+            durationSeconds: Math.max(1, Math.round((endedAt - startedAt - pausedMs) / 1000)),
           };
         }),
     [rawSessions, catById],
   );
 
   const [tickNow, setTickNow] = useState(Date.now());
+  const [pickerParentId, setPickerParentId] = useState<string>("");
   const [pickerCatId, setPickerCatId] = useState<string>("");
   const [pickerNote, setPickerNote] = useState("");
   const [pickerReminders, setPickerReminders] = useState<number[]>(() => {
@@ -198,16 +212,30 @@ function CronometroPage() {
   const [editingSession, setEditingSession] = useState<Session | null>(null);
   const [period, setPeriod] = useState<Period>("week");
   const [refDate, setRefDate] = useState<Date>(new Date());
+  const [breakdownMode, setBreakdownMode] = useState<"parent" | "sub">("parent");
 
+  const parentCats = useMemo(() => cats.filter((c) => !c.parentId), [cats]);
+  const subCatsOf = (pid: string) => cats.filter((c) => c.parentId === pid);
+
+  const isPaused = !!activeDb?.paused_at;
   useEffect(() => {
-    if (!activeDb) return;
+    if (!activeDb || isPaused) return;
     const t = setInterval(() => setTickNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [activeDb]);
+  }, [activeDb, isPaused]);
 
   useEffect(() => {
-    if (!pickerCatId && cats[0]) setPickerCatId(cats[0].id);
-  }, [cats, pickerCatId]);
+    if (!pickerParentId && parentCats[0]) setPickerParentId(parentCats[0].id);
+  }, [parentCats, pickerParentId]);
+  useEffect(() => {
+    if (!pickerParentId) return;
+    const subs = subCatsOf(pickerParentId);
+    // If current pickerCatId is not the parent and not one of its subs, reset
+    if (pickerCatId !== pickerParentId && !subs.some((s) => s.id === pickerCatId)) {
+      setPickerCatId(pickerParentId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickerParentId, cats]);
 
   const startMut = useMutation({
     mutationFn: async () => {
@@ -236,9 +264,42 @@ function CronometroPage() {
   const stopMut = useMutation({
     mutationFn: async () => {
       if (!activeDb) return;
+      const now = Date.now();
+      // If currently paused, finalize paused_ms with the time spent paused so far and clear paused_at.
+      const wasPaused = !!activeDb.paused_at;
+      const extraPaused = wasPaused ? now - Date.parse(activeDb.paused_at!) : 0;
       const { error } = await supabase
         .from("timer_sessions")
-        .update({ ended_at: new Date().toISOString() })
+        .update({
+          ended_at: new Date(now).toISOString(),
+          paused_at: null,
+          paused_ms: (activeDb.paused_ms ?? 0) + extraPaused,
+        })
+        .eq("id", activeDb.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["timer-sessions", user?.id] }),
+  });
+
+  const pauseMut = useMutation({
+    mutationFn: async () => {
+      if (!activeDb || activeDb.paused_at) return;
+      const { error } = await supabase
+        .from("timer_sessions")
+        .update({ paused_at: new Date().toISOString() })
+        .eq("id", activeDb.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["timer-sessions", user?.id] }),
+  });
+
+  const resumeMut = useMutation({
+    mutationFn: async () => {
+      if (!activeDb || !activeDb.paused_at) return;
+      const extra = Date.now() - Date.parse(activeDb.paused_at);
+      const { error } = await supabase
+        .from("timer_sessions")
+        .update({ paused_at: null, paused_ms: (activeDb.paused_ms ?? 0) + extra })
         .eq("id", activeDb.id);
       if (error) throw error;
     },
@@ -294,15 +355,39 @@ function CronometroPage() {
   const totalSec = inPeriod.reduce((acc, s) => acc + s.durationSeconds, 0);
 
   const byCategory = useMemo(() => {
+    // Aggregate by parent category (so subcategories roll up under their parent's color).
     const map = new Map<string, { name: string; color: string; value: number }>();
     for (const s of inPeriod) {
-      const row = map.get(s.categoryId) ?? {
-        name: s.categoryName,
-        color: s.categoryColor,
+      const key = s.parentId ?? s.categoryId;
+      const row = map.get(key) ?? {
+        name: s.parentName,
+        color: s.parentColor,
         value: 0,
       };
       row.value += s.durationSeconds;
-      map.set(s.categoryId, row);
+      map.set(key, row);
+    }
+    return Array.from(map.values()).sort((a, b) => b.value - a.value);
+  }, [inPeriod]);
+
+  const bySubcategory = useMemo(() => {
+    // Break down each parent into its subcategories (+ note when there's no subcategory).
+    type Row = { key: string; parentName: string; parentColor: string; subName: string; color: string; value: number };
+    const map = new Map<string, Row>();
+    for (const s of inPeriod) {
+      const isSub = s.parentId && s.parentId !== s.categoryId;
+      const subName = isSub ? s.categoryName : (s.note || "—");
+      const key = `${s.parentId ?? s.categoryId}::${subName}`;
+      const row = map.get(key) ?? {
+        key,
+        parentName: s.parentName,
+        parentColor: s.parentColor,
+        subName,
+        color: isSub ? s.categoryColor : s.parentColor,
+        value: 0,
+      };
+      row.value += s.durationSeconds;
+      map.set(key, row);
     }
     return Array.from(map.values()).sort((a, b) => b.value - a.value);
   }, [inPeriod]);
@@ -363,7 +448,14 @@ function CronometroPage() {
 
   const activeStartedAt = activeDb ? Date.parse(activeDb.started_at) : 0;
   const activeCat = activeDb?.category_id ? catById.get(activeDb.category_id) : undefined;
-  const elapsedActive = activeDb ? Math.floor((tickNow - activeStartedAt) / 1000) : 0;
+  const activeParent = activeCat?.parentId ? catById.get(activeCat.parentId) : activeCat;
+  const activePausedAt = activeDb?.paused_at ? Date.parse(activeDb.paused_at) : 0;
+  const activePausedMs = activeDb?.paused_ms ?? 0;
+  const elapsedActive = activeDb
+    ? Math.floor(
+        ((activePausedAt ? activePausedAt : tickNow) - activeStartedAt - activePausedMs) / 1000,
+      )
+    : 0;
 
   useNativeTimerMirror(
     activeDb
@@ -373,7 +465,7 @@ function CronometroPage() {
           categoryName: activeCat?.name ?? "—",
           categoryColor: activeCat?.color ?? "#888",
           note: activeDb.note ?? "",
-          startedAt: activeStartedAt,
+          startedAt: activeStartedAt + activePausedMs + (activePausedAt ? Date.now() - activePausedAt : 0),
           reminders: activeDb.reminders_minutes ?? [],
         }
       : { active: false },
@@ -484,9 +576,19 @@ function CronometroPage() {
           <div className="flex flex-col md:flex-row md:items-center gap-6 md:gap-10">
             <div className="flex-1">
               <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-                Em curso
+                {isPaused ? "Em pausa" : "Em curso"}
               </div>
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                {activeParent && activeParent.id !== activeCat?.id && (
+                  <>
+                    <span
+                      className="h-3 w-3 rounded-full"
+                      style={{ background: activeParent.color }}
+                    />
+                    <span className="text-sm font-medium text-muted-foreground">{activeParent.name}</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  </>
+                )}
                 <span
                   className="h-3 w-3 rounded-full"
                   style={{ background: activeCat?.color ?? "#888" }}
@@ -502,17 +604,35 @@ function CronometroPage() {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
+                {activePausedMs > 0 && ` · pausado ${fmtDuration(Math.round(activePausedMs / 1000))}`}
               </p>
             </div>
-            <div className="text-5xl md:text-6xl font-mono font-bold neon-text tabular-nums">
+            <div className={`text-5xl md:text-6xl font-mono font-bold tabular-nums ${isPaused ? "text-muted-foreground" : "neon-text"}`}>
               {fmtDuration(elapsedActive)}
             </div>
             <div className="flex flex-col gap-2">
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                {isPaused ? (
+                  <button
+                    onClick={() => resumeMut.mutate()}
+                    disabled={resumeMut.isPending}
+                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-medium hover:shadow-glow-strong transition-all"
+                  >
+                    <Play className="h-4 w-4" /> Retomar
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => pauseMut.mutate()}
+                    disabled={pauseMut.isPending}
+                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-input border border-border font-medium hover:border-primary/50"
+                  >
+                    <Pause className="h-4 w-4" /> Pausar
+                  </button>
+                )}
                 <button
                   onClick={() => stopMut.mutate()}
                   disabled={stopMut.isPending}
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-medium hover:shadow-glow-strong transition-all"
+                  className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-input border border-border text-sm hover:border-primary/50"
                 >
                   <Square className="h-4 w-4" /> Parar
                 </button>
@@ -542,18 +662,36 @@ function CronometroPage() {
           </div>
         ) : (
           <div className="flex flex-col md:flex-row md:items-end gap-4">
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-[14rem_1fr] gap-3">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-[10rem_10rem_1fr] gap-3">
               <div>
                 <label className="text-[11px] uppercase tracking-widest text-muted-foreground">
                   Categoria
                 </label>
                 <select
+                  value={pickerParentId}
+                  onChange={(e) => setPickerParentId(e.target.value)}
+                  className="mt-1 w-full px-3 py-2.5 rounded-lg bg-input border border-border text-sm"
+                >
+                  {parentCats.length === 0 && <option value="">— sem categorias —</option>}
+                  {parentCats.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                  Subcategoria
+                </label>
+                <select
                   value={pickerCatId}
                   onChange={(e) => setPickerCatId(e.target.value)}
                   className="mt-1 w-full px-3 py-2.5 rounded-lg bg-input border border-border text-sm"
+                  disabled={!pickerParentId}
                 >
-                  {cats.length === 0 && <option value="">— sem categorias —</option>}
-                  {cats.map((c) => (
+                  <option value={pickerParentId}>— (nenhuma) —</option>
+                  {subCatsOf(pickerParentId).map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
@@ -574,7 +712,7 @@ function CronometroPage() {
                   }}
                 />
               </div>
-              <div className="md:col-span-2">
+              <div className="md:col-span-3">
                 <label className="text-[11px] uppercase tracking-widest text-muted-foreground">
                   Lembretes (notificação após o início) · podes escolher vários
                 </label>
@@ -688,9 +826,29 @@ function CronometroPage() {
         </div>
 
         <div className="glass-card p-5">
-          <h3 className="text-sm uppercase tracking-wider text-muted-foreground mb-4">
-            Distribuição por categoria
-          </h3>
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <h3 className="text-sm uppercase tracking-wider text-muted-foreground">
+              Distribuição {breakdownMode === "parent" ? "por categoria" : "por subcategoria"}
+            </h3>
+            <div className="flex gap-1 rounded-lg border border-border bg-card/60 p-0.5">
+              <button
+                onClick={() => setBreakdownMode("parent")}
+                className={`px-2 py-1 rounded-md text-[10px] font-medium uppercase tracking-wider transition-colors ${
+                  breakdownMode === "parent" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Categoria
+              </button>
+              <button
+                onClick={() => setBreakdownMode("sub")}
+                className={`px-2 py-1 rounded-md text-[10px] font-medium uppercase tracking-wider transition-colors ${
+                  breakdownMode === "sub" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Subcategoria
+              </button>
+            </div>
+          </div>
           {byCategory.length === 0 ? (
             <EmptyChart label="Sem dados" />
           ) : (
@@ -698,15 +856,15 @@ function CronometroPage() {
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie
-                    data={byCategory}
+                    data={breakdownMode === "parent" ? byCategory : bySubcategory}
                     dataKey="value"
-                    nameKey="name"
+                    nameKey={breakdownMode === "parent" ? "name" : "subName"}
                     innerRadius={55}
                     outerRadius={90}
                     paddingAngle={2}
                     stroke="var(--background)"
                   >
-                    {byCategory.map((c, i) => (
+                    {(breakdownMode === "parent" ? byCategory : bySubcategory).map((c: any, i) => (
                       <Cell key={i} fill={c.color} />
                     ))}
                   </Pie>
@@ -717,26 +875,51 @@ function CronometroPage() {
                       borderRadius: 8,
                       color: "var(--popover-foreground)",
                     }}
-                    formatter={(v: number) => fmtHoursShort(v)}
+                    formatter={(v: number, _n, item: any) => {
+                      const p = item?.payload;
+                      const label = breakdownMode === "sub" && p?.parentName && p?.parentName !== p?.subName
+                        ? `${p.parentName} › ${p.subName}`
+                        : (p?.name ?? p?.subName);
+                      return [fmtHoursShort(v), label];
+                    }}
                   />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="space-y-1.5 mt-2">
-                {byCategory.map((c) => {
-                  const pct = totalSec > 0 ? (c.value / totalSec) * 100 : 0;
-                  return (
-                    <div key={c.name} className="flex items-center gap-2 text-xs">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full shrink-0"
-                        style={{ background: c.color }}
-                      />
-                      <span className="flex-1 truncate">{c.name}</span>
-                      <span className="text-muted-foreground tabular-nums">
-                        {fmtHoursShort(c.value)} · {pct.toFixed(0)}%
-                      </span>
-                    </div>
-                  );
-                })}
+              <div className="space-y-1.5 mt-2 max-h-48 overflow-y-auto pr-1">
+                {breakdownMode === "parent"
+                  ? byCategory.map((c) => {
+                      const pct = totalSec > 0 ? (c.value / totalSec) * 100 : 0;
+                      return (
+                        <div key={c.name} className="flex items-center gap-2 text-xs">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full shrink-0"
+                            style={{ background: c.color }}
+                          />
+                          <span className="flex-1 truncate">{c.name}</span>
+                          <span className="text-muted-foreground tabular-nums">
+                            {fmtHoursShort(c.value)} · {pct.toFixed(0)}%
+                          </span>
+                        </div>
+                      );
+                    })
+                  : bySubcategory.map((c) => {
+                      const pct = totalSec > 0 ? (c.value / totalSec) * 100 : 0;
+                      return (
+                        <div key={c.key} className="flex items-center gap-2 text-xs">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full shrink-0"
+                            style={{ background: c.color }}
+                          />
+                          <span className="flex-1 truncate">
+                            <span className="text-muted-foreground">{c.parentName} › </span>
+                            {c.subName}
+                          </span>
+                          <span className="text-muted-foreground tabular-nums">
+                            {fmtHoursShort(c.value)} · {pct.toFixed(0)}%
+                          </span>
+                        </div>
+                      );
+                    })}
               </div>
             </>
           )}
@@ -854,10 +1037,12 @@ function CategoryManager({
 }) {
   const [name, setName] = useState("");
   const [color, setColor] = useState("#ff7a18");
+  const [parentId, setParentId] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const used = new Set(sessions.map((s) => s.categoryId));
+  const parents = cats.filter((c) => !c.parentId);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -868,17 +1053,18 @@ function CategoryManager({
       if (editingId) {
         const { error } = await supabase
           .from("timer_categories")
-          .update({ name: trimmed, color })
+          .update({ name: trimmed, color, parent_id: parentId || null })
           .eq("id", editingId);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("timer_categories")
-          .insert({ user_id: userId, name: trimmed, color });
+          .insert({ user_id: userId, name: trimmed, color, parent_id: parentId || null });
         if (error) throw error;
       }
       setName("");
       setColor("#ff7a18");
+      setParentId("");
       setEditingId(null);
       onChanged();
     } catch (err) {
@@ -892,6 +1078,7 @@ function CategoryManager({
     setEditingId(c.id);
     setName(c.name);
     setColor(c.color);
+    setParentId(c.parentId ?? "");
   };
 
   const remove = async (c: Cat) => {
@@ -912,7 +1099,7 @@ function CategoryManager({
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm p-4">
       <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="font-semibold">Categorias</h3>
+          <h3 className="font-semibold">Categorias e subcategorias</h3>
           <button
             onClick={onClose}
             className="p-1.5 rounded-md hover:bg-accent/40"
@@ -936,6 +1123,25 @@ function CategoryManager({
               className="h-10 w-12 rounded-lg bg-input border border-border cursor-pointer"
             />
           </div>
+          <div>
+            <label className="text-[11px] uppercase tracking-widest text-muted-foreground">
+              Categoria-mãe (opcional)
+            </label>
+            <select
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+              className="mt-1 w-full px-3 py-2 rounded-lg bg-input border border-border text-sm"
+            >
+              <option value="">— Nenhuma (categoria principal) —</option>
+              {parents
+                .filter((p) => p.id !== editingId)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+          </div>
           <div className="flex gap-2">
             <button
               type="submit"
@@ -951,6 +1157,7 @@ function CategoryManager({
                   setEditingId(null);
                   setName("");
                   setColor("#ff7a18");
+                  setParentId("");
                 }}
                 className="px-3 py-2 rounded-lg bg-input border border-border text-sm"
               >
@@ -960,27 +1167,39 @@ function CategoryManager({
           </div>
         </form>
         <div className="max-h-80 overflow-y-auto p-3 space-y-1">
-          {cats.map((c) => (
-            <div
-              key={c.id}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent/30"
-            >
-              <span className="h-3 w-3 rounded-full" style={{ background: c.color }} />
-              <span className="flex-1 text-sm">{c.name}</span>
-              <button
-                onClick={() => edit(c)}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-              <button
-                onClick={() => remove(c)}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
+          {parents.map((p) => {
+            const subs = cats.filter((c) => c.parentId === p.id);
+            return (
+              <div key={p.id}>
+                <div className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent/30">
+                  <span className="h-3 w-3 rounded-full" style={{ background: p.color }} />
+                  <span className="flex-1 text-sm font-medium">{p.name}</span>
+                  <button onClick={() => edit(p)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => remove(p)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {subs.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center gap-3 pl-8 pr-3 py-1.5 rounded-lg hover:bg-accent/30"
+                  >
+                    <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: c.color }} />
+                    <span className="flex-1 text-sm text-muted-foreground">{c.name}</span>
+                    <button onClick={() => edit(c)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground">
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button onClick={() => remove(c)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive">
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
