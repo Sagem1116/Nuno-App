@@ -581,15 +581,10 @@ function CronometroPage() {
                   .eq("user_id", user.id);
                 if (existingErr) { toast.error(existingErr.message); return; }
                 const importedKeys = new Set(uniqueRows.map(sessionKey));
-                const toDelete = (existing ?? [])
-                  .filter((e) => importedKeys.has(sessionKey(e)))
-                  .map((e) => e.id);
-                if (toDelete.length) {
-                  const { error: delErr } = await supabase.from("timer_sessions").delete().in("id", toDelete);
-                  if (delErr) { toast.error(delErr.message); return; }
-                  replaced = toDelete.length;
-                }
-                const { error } = await supabase.from("timer_sessions").insert(uniqueRows);
+                replaced = (existing ?? []).filter((e) => importedKeys.has(sessionKey(e))).length;
+                const { error } = await supabase
+                  .from("timer_sessions")
+                  .upsert(uniqueRows, { onConflict: "user_id,started_at,ended_at" });
                 if (error) { toast.error(error.message); return; }
               }
               qc.invalidateQueries({ queryKey: ["timer-sessions", user.id] });

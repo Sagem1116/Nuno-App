@@ -176,16 +176,14 @@ async function replaceMatchingTimerSessions(rows: Record<string, unknown>[], use
     .eq("user_id", userId);
   if (existingError) return { ok: false, error: existingError.message, inserted: 0, replaced: 0 };
   const importedKeys = new Set(uniqueRows.map(sessionKey));
-  const toDelete = (existing ?? [])
+  const replaced = (existing ?? [])
     .filter((e) => importedKeys.has(sessionKey(e as Record<string, unknown>)))
-    .map((e) => e.id);
-  if (toDelete.length) {
-    const { error } = await supabase.from("timer_sessions").delete().in("id", toDelete);
-    if (error) return { ok: false, error: error.message, inserted: 0, replaced: 0 };
-  }
-  const { error } = await supabase.from("timer_sessions").insert(uniqueRows as any);
-  if (error) return { ok: false, error: error.message, inserted: 0, replaced: toDelete.length };
-  return { ok: true, inserted: uniqueRows.length, replaced: toDelete.length };
+    .length;
+  const { error } = await supabase
+    .from("timer_sessions")
+    .upsert(uniqueRows as any, { onConflict: "user_id,started_at,ended_at" });
+  if (error) return { ok: false, error: error.message, inserted: 0, replaced };
+  return { ok: true, inserted: uniqueRows.length, replaced };
 }
 
 export async function importHierarchicalCategories(
