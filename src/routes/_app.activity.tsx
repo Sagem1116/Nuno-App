@@ -79,8 +79,20 @@ function ActivityPage() {
     queryKey: ["activity_logs", uid],
     enabled: !!uid,
     queryFn: async () => {
-      const { data, error } = await supabase.from("activity_logs").select("*").order("start_time", { ascending: false }).limit(5000);
-      if (error) throw error; return (data ?? []) as Log[];
+      // paginate to bypass PostgREST default 1000-row cap
+      const PAGE = 1000;
+      const all: Log[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from("activity_logs")
+          .select("*")
+          .order("start_time", { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        all.push(...((data ?? []) as Log[]));
+        if (!data || data.length < PAGE) break;
+      }
+      return all;
     },
   });
 
