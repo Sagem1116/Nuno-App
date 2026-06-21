@@ -539,6 +539,7 @@ function CronometroPage() {
               if (!user) return;
               const parsed: any = await pickJsonFile();
               if (!parsed) return;
+              if (!validateEnvelope(parsed, "cronometro_full")) return;
               const cats: any[] = Array.isArray(parsed?.categories) ? parsed.categories : [];
               const sess: any[] = Array.isArray(parsed?.sessions) ? parsed.sessions : [];
               let idMap = new Map<string, string>();
