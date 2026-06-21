@@ -543,15 +543,72 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
 function MetaTab({ uid, cats, projs, onChanged }: { uid: string; cats: Category[]; projs: Project[]; onChanged: () => void }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <MetaList title="Categorias" items={cats} table="activity_categories" uid={uid} onChanged={onChanged} defaultColor="#6366f1" />
+      <CategoriesList cats={cats} uid={uid} onChanged={onChanged} />
       <MetaList title="Projetos" items={projs} table="activity_projects" uid={uid} onChanged={onChanged} defaultColor="#10b981" />
     </div>
   );
 }
 
+function CategoriesList({ cats, uid, onChanged }: { cats: Category[]; uid: string; onChanged: () => void }) {
+  const [name, setName] = useState("");
+  const [color, setColor] = useState("#6366f1");
+  const [parentId, setParentId] = useState<string>("__none__");
+  const parents = useMemo(() => cats.filter(c => !c.parent_id), [cats]);
+
+  async function add() {
+    if (!name.trim()) return;
+    const payload: any = { user_id: uid, name: name.trim(), color };
+    if (parentId && parentId !== "__none__") payload.parent_id = parentId;
+    const { error } = await supabase.from("activity_categories").insert(payload);
+    if (error) { toast.error(error.message); return; }
+    setName(""); setParentId("__none__"); onChanged();
+  }
+  async function del(id: string) {
+    const { error } = await supabase.from("activity_categories").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    onChanged();
+  }
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Categorias</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <Input placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} className="flex-1 min-w-40" />
+          <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded border border-input bg-transparent" />
+          <Select value={parentId} onValueChange={setParentId}>
+            <SelectTrigger className="w-40"><SelectValue placeholder="Categoria-mãe" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Sem mãe</SelectItem>
+              {parents.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button size="sm" onClick={add}><Plus className="h-4 w-4" /></Button>
+        </div>
+        <div className="space-y-1">
+          {parents.map(p => (
+            <div key={p.id}>
+              <div className="flex items-center justify-between p-2 rounded border border-border">
+                <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: p.color }} />{p.name}</div>
+                <Button variant="ghost" size="icon" onClick={() => del(p.id)}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+              {cats.filter(c => c.parent_id === p.id).map(s => (
+                <div key={s.id} className="flex items-center justify-between p-2 ml-6 rounded border border-border mt-1">
+                  <div className="flex items-center gap-2 text-sm"><span className="text-muted-foreground">↳</span><span className="h-3 w-3 rounded-full" style={{ backgroundColor: s.color }} />{s.name}</div>
+                  <Button variant="ghost" size="icon" onClick={() => del(s.id)}><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              ))}
+            </div>
+          ))}
+          {!parents.length && <div className="text-sm text-muted-foreground">Vazio.</div>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function MetaList({ title, items, table, uid, onChanged, defaultColor }: {
   title: string; items: { id: string; name: string; color: string }[];
-  table: "activity_categories" | "activity_projects"; uid: string; onChanged: () => void; defaultColor: string;
+  table: "activity_projects"; uid: string; onChanged: () => void; defaultColor: string;
 }) {
   const [name, setName] = useState("");
   const [color, setColor] = useState(defaultColor);
