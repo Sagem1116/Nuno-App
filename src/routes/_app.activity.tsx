@@ -663,7 +663,7 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
           <Input placeholder="padrão (ex.: Code.exe)" value={pattern} onChange={(e) => setPattern(e.target.value)} />
           <Select value={catId} onValueChange={setCatId}>
             <SelectTrigger><SelectValue placeholder="Categoria" /></SelectTrigger>
-            <SelectContent>{cats.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+            <SelectContent>{renderCategoryOptions(cats)}</SelectContent>
           </Select>
           <Select value={projId} onValueChange={setProjId}>
             <SelectTrigger><SelectValue placeholder="Projeto (opcional)" /></SelectTrigger>
