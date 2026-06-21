@@ -36,8 +36,8 @@ const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 export type Table = "notes" | "links" | "transactions" | "tasks" | "timer_categories" | "timer_sessions";
 
 const ALLOWED_FIELDS: Record<Table, string[]> = {
-  notes: ["title", "content", "tags"],
-  links: ["title", "url", "description", "tags"],
+  notes: ["title", "content", "tags", "is_favorite"],
+  links: ["title", "url", "description", "tags", "is_favorite"],
   transactions: ["amount", "type", "category", "description", "occurred_at"],
   tasks: ["title", "description", "priority", "due_date", "status"],
   timer_categories: ["name", "color"],
@@ -131,5 +131,75 @@ export async function runWeeklyAutoExports() {
     } catch (e) {
       console.warn("auto-export failed", table, e);
     }
+  }
+  await runGlobalAutoExport();
+}
+
+// ---------- Global schedule (all tables) ----------
+
+const SCHED_KEY = "autoexport:schedule:v1";
+
+export type Frequency = "daily" | "weekly" | "monthly";
+export type GlobalSchedule = {
+  enabled: boolean;
+  frequency: Frequency;
+  dayOfWeek: number; // 0=Sun..6=Sat
+  dayOfMonth: number; // 1..28
+  hour: number; // 0..23
+  last: number;
+};
+
+const DEFAULT_SCHED: GlobalSchedule = {
+  enabled: false,
+  frequency: "weekly",
+  dayOfWeek: 1,
+  dayOfMonth: 1,
+  hour: 9,
+  last: 0,
+};
+
+export function getGlobalSchedule(): GlobalSchedule {
+  try {
+    const raw = localStorage.getItem(SCHED_KEY);
+    if (!raw) return { ...DEFAULT_SCHED };
+    return { ...DEFAULT_SCHED, ...JSON.parse(raw) };
+  } catch { return { ...DEFAULT_SCHED }; }
+}
+
+export function setGlobalSchedule(patch: Partial<GlobalSchedule>) {
+  const cur = getGlobalSchedule();
+  const next = { ...cur, ...patch };
+  localStorage.setItem(SCHED_KEY, JSON.stringify(next));
+  return next;
+}
+
+function isDue(s: GlobalSchedule, now: Date): boolean {
+  if (!s.enabled) return false;
+  if (now.getHours() < s.hour) return false;
+  const last = s.last ? new Date(s.last) : null;
+  const sameDay = last
+    && last.getFullYear() === now.getFullYear()
+    && last.getMonth() === now.getMonth()
+    && last.getDate() === now.getDate();
+  if (sameDay) return false;
+  if (s.frequency === "daily") return true;
+  if (s.frequency === "weekly") return now.getDay() === s.dayOfWeek;
+  if (s.frequency === "monthly") return now.getDate() === s.dayOfMonth;
+  return false;
+}
+
+const ALL_TABLES: Table[] = ["notes", "links", "tasks", "transactions", "timer_categories", "timer_sessions"];
+
+async function runGlobalAutoExport() {
+  const sched = getGlobalSchedule();
+  if (!isDue(sched, new Date())) return;
+  try {
+    for (const t of ALL_TABLES) {
+      await exportTable(t, { silent: true });
+    }
+    setGlobalSchedule({ last: Date.now() });
+    toast.success("Auto-exportação programada concluída");
+  } catch (e) {
+    console.warn("global auto-export failed", e);
   }
 }

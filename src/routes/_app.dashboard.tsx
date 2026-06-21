@@ -8,7 +8,7 @@ import { format, isToday, isPast, parseISO, differenceInCalendarDays, isValid } 
 import { pt } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { exportData, exportTable, importTable, type Table as DataTable } from "@/lib/data-io";
+import { exportData, exportTable, importTable, getGlobalSchedule, setGlobalSchedule, type Table as DataTable, type Frequency } from "@/lib/data-io";
 import { AutoExportMenu } from "@/components/auto-export-menu";
 import { NotificationsSettings } from "@/components/notifications-settings";
 import { NotepadViewer } from "@/components/notepad-viewer";
@@ -768,6 +768,16 @@ const BACKUP_TABLES: { table: DataTable; label: string }[] = [
 function BackupsPanel({ userId }: { userId: string | undefined }) {
   const [collapsed, setCollapsed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sched, setSched] = useState(() =>
+    typeof window === "undefined"
+      ? { enabled: false, frequency: "weekly" as Frequency, dayOfWeek: 1, dayOfMonth: 1, hour: 9, last: 0 }
+      : getGlobalSchedule()
+  );
+
+  const updateSched = (patch: Partial<typeof sched>) => {
+    const next = setGlobalSchedule(patch);
+    setSched(next);
+  };
 
   const exportAll = async () => {
     setBusy(true);
@@ -779,6 +789,8 @@ function BackupsPanel({ userId }: { userId: string | undefined }) {
       setBusy(false);
     }
   };
+
+  const weekDays = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
   return (
     <section className="glass-card overflow-hidden">
@@ -808,6 +820,80 @@ function BackupsPanel({ userId }: { userId: string | undefined }) {
               Descarrega um JSON por cada secção: notas, links, tarefas, transações, cronómetro.
             </span>
           </div>
+
+          <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-medium">Auto-exportação programada (tudo)</div>
+                <div className="text-[11px] text-muted-foreground">
+                  Exporta todas as secções automaticamente. {sched.last ? `Última: ${new Date(sched.last).toLocaleString()}` : "Nunca executada."}
+                </div>
+              </div>
+              <label className="inline-flex items-center gap-2 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sched.enabled}
+                  onChange={(e) => updateSched({ enabled: e.target.checked })}
+                  className="h-4 w-4 accent-primary"
+                />
+                {sched.enabled ? "Ativada" : "Desativada"}
+              </label>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <label className="text-xs space-y-1">
+                <span className="block text-muted-foreground">Frequência</span>
+                <select
+                  value={sched.frequency}
+                  onChange={(e) => updateSched({ frequency: e.target.value as Frequency })}
+                  className="w-full px-2 py-1.5 rounded-md bg-input border border-border text-xs"
+                >
+                  <option value="daily">Diária</option>
+                  <option value="weekly">Semanal</option>
+                  <option value="monthly">Mensal</option>
+                </select>
+              </label>
+              {sched.frequency === "weekly" && (
+                <label className="text-xs space-y-1">
+                  <span className="block text-muted-foreground">Dia da semana</span>
+                  <select
+                    value={sched.dayOfWeek}
+                    onChange={(e) => updateSched({ dayOfWeek: Number(e.target.value) })}
+                    className="w-full px-2 py-1.5 rounded-md bg-input border border-border text-xs"
+                  >
+                    {weekDays.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                  </select>
+                </label>
+              )}
+              {sched.frequency === "monthly" && (
+                <label className="text-xs space-y-1">
+                  <span className="block text-muted-foreground">Dia do mês</span>
+                  <select
+                    value={sched.dayOfMonth}
+                    onChange={(e) => updateSched({ dayOfMonth: Number(e.target.value) })}
+                    className="w-full px-2 py-1.5 rounded-md bg-input border border-border text-xs"
+                  >
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </label>
+              )}
+              <label className="text-xs space-y-1">
+                <span className="block text-muted-foreground">Hora</span>
+                <select
+                  value={sched.hour}
+                  onChange={(e) => updateSched({ hour: Number(e.target.value) })}
+                  className="w-full px-2 py-1.5 rounded-md bg-input border border-border text-xs"
+                >
+                  {Array.from({ length: 24 }, (_, i) => i).map((h) => (
+                    <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Os backups disparam quando abres a app na hora escolhida (ou depois). É necessário ter a app aberta no dispositivo.
+            </p>
+          </div>
+
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {BACKUP_TABLES.map(({ table, label }) => (
