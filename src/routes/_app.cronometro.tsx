@@ -782,6 +782,46 @@ function CronometroPage() {
         </div>
       </section>
 
+      <section className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] uppercase tracking-widest text-muted-foreground mr-1">
+          Filtrar
+        </span>
+        <select
+          value={parentFilter}
+          onChange={(e) => {
+            setParentFilter(e.target.value);
+            setSubFilter("all");
+          }}
+          className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs"
+        >
+          <option value="all">Todas as categorias</option>
+          {parentCats.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        <select
+          value={subFilter}
+          onChange={(e) => setSubFilter(e.target.value)}
+          disabled={parentFilter === "all" || subCatsOf(parentFilter).length === 0}
+          className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs disabled:opacity-50"
+        >
+          <option value="all">Todas as subcategorias</option>
+          {parentFilter !== "all" && subCatsOf(parentFilter).map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        {(parentFilter !== "all" || subFilter !== "all") && (
+          <button
+            onClick={() => { setParentFilter("all"); setSubFilter("all"); }}
+            className="px-2 py-1.5 rounded-lg bg-input border border-border text-xs hover:border-primary/50"
+          >
+            Limpar
+          </button>
+        )}
+      </section>
+
+
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="glass-card p-5">
           <div className="text-xs uppercase tracking-wider text-muted-foreground">
