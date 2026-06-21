@@ -136,6 +136,23 @@ function Dashboard() {
 
   const today = new Date();
 
+  const isInPeriod = (dateStr: string | null, period: "all" | "today" | "last_day") => {
+    if (period === "all") return true;
+    const date = parseValidDate(dateStr);
+    if (!date) return false;
+    if (period === "today") return isToday(date);
+    return isSameDay(date, subDays(today, 1));
+  };
+
+  const visibleTasks = useMemo(() => tasks.filter((t) => isInPeriod(t.due_date, periodFilter)), [tasks, periodFilter]);
+  const visibleTxs = useMemo(() => txs.filter((t) => isInPeriod(t.occurred_at, periodFilter)), [txs, periodFilter]);
+  const visibleNotes = useMemo(() => notes.filter((n) => isInPeriod(n.created_at, periodFilter)), [notes, periodFilter]);
+  const visibleLinks = useMemo(() => links.filter((l) => isInPeriod(l.created_at, periodFilter)), [links, periodFilter]);
+  const visibleReservations = useMemo(() => reservations.filter((r) => isInPeriod(r.created_at, periodFilter)), [reservations, periodFilter]);
+  const visibleTrips = useMemo(() => trips.filter((t) => isInPeriod(t.start_date, periodFilter)), [trips, periodFilter]);
+  const visibleFavNotes = useMemo(() => favNotes.filter((n) => isInPeriod(n.created_at, periodFilter)), [favNotes, periodFilter]);
+  const visibleFavLinks = useMemo(() => favLinks.filter((l) => isInPeriod(l.created_at, periodFilter)), [favLinks, periodFilter]);
+
   const taskStats = useMemo(() => {
     const pending = tasks.filter((t) => t.status === "pending");
     const overdue = pending.filter((t) => {
