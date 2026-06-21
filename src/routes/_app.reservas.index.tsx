@@ -47,9 +47,7 @@ function ReservasPage() {
   const [confirmation, setConfirmation] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const extract = useServerFn(extractReservation);
 
   const load = async () => {
     if (!user) return;
@@ -75,19 +73,6 @@ function ReservasPage() {
     if (user) load();
   }, [user]);
 
-  const processDocument = async (file: File): Promise<any> => {
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        resolve(result.split(",")[1]);
-      };
-      reader.onerror = () => reject(new Error("Failed to read file"));
-      reader.readAsDataURL(file);
-    });
-    const documentType: "image" | "pdf" = file.type.startsWith("image") ? "image" : "pdf";
-    return await extract({ data: { base64, mimeType: file.type || "application/octet-stream", documentType } });
-  };
 
   const addReservation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,16 +85,6 @@ function ReservasPage() {
       setError(null);
       setUploading(true);
 
-      let extractedData = null;
-      let extractionConfidence = null;
-
-      // Process document if uploaded
-      if (uploadFile) {
-        const processed = await processDocument(uploadFile);
-        extractedData = processed?.data || null;
-        extractionConfidence = processed?.confidence || null;
-      }
-
       const { data, error: err } = await (supabase as any)
         .from("reservations")
         .insert({
@@ -119,8 +94,8 @@ function ReservasPage() {
           confirmation_number: confirmation.trim() || null,
           notes: notes.trim(),
           status: "pending",
-          extracted_data: extractedData,
-          extraction_confidence: extractionConfidence,
+          extracted_data: null,
+          extraction_confidence: null,
         })
         .select()
         .single();
@@ -132,7 +107,6 @@ function ReservasPage() {
         setTitle("");
         setConfirmation("");
         setNotes("");
-        setUploadFile(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao criar reserva");
