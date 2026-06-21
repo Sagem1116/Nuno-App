@@ -294,7 +294,20 @@ function Dashboard() {
             Olá, <span className="neon-text">{user?.email?.split("@")[0]}</span>
           </h2>
         </div>
-        <Clock />
+        <div className="flex items-center gap-3">
+          <label className="sr-only" htmlFor="period-filter">Período</label>
+          <select
+            id="period-filter"
+            value={periodFilter}
+            onChange={(e) => setPeriodFilter(e.target.value as "all" | "today" | "last_day")}
+            className="input-style text-sm py-2"
+          >
+            <option value="all">Tudo</option>
+            <option value="today">Hoje</option>
+            <option value="last_day">Último dia</option>
+          </select>
+          <Clock />
+        </div>
       </div>
 
       {/* KPI cards */}
