@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Play, Square, Plus, Pencil, Trash2, X, Timer, Tags as TagsIcon, Loader2,
-  PictureInPicture2, Bell, BellOff,
+  PictureInPicture2, Bell, BellOff, Download, Upload,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -13,6 +13,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useNativeTimerMirror } from "@/lib/native-timer-mirror";
+import { downloadJson, pickJsonFile } from "@/lib/data-io";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/cronometro")({
   component: CronometroPage,
@@ -403,12 +405,78 @@ function CronometroPage() {
             Sincronizado entre os teus dispositivos · relatórios diários, semanais e mensais.
           </p>
         </div>
-        <button
-          onClick={() => setCatManagerOpen(true)}
-          className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg bg-input border border-border text-xs hover:border-primary/50"
-        >
-          <TagsIcon className="h-3.5 w-3.5" /> Categorias
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={async () => {
+              const [{ data: cs }, { data: ss }] = await Promise.all([
+                supabase.from("timer_categories").select("*"),
+                supabase.from("timer_sessions").select("*"),
+              ]);
+              const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+              downloadJson(`cronometro-${stamp}.json`, {
+                version: 1, exported_at: new Date().toISOString(),
+                categories: cs ?? [], sessions: ss ?? [],
+              });
+              toast.success(`${(ss ?? []).length} sessão(ões) exportada(s)`);
+            }}
+            className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg bg-input border border-border text-xs hover:border-primary/50"
+          >
+            <Download className="h-3.5 w-3.5" /> Exportar
+          </button>
+          <button
+            onClick={async () => {
+              if (!user) return;
+              const parsed: any = await pickJsonFile();
+              if (!parsed) return;
+              const cats: any[] = Array.isArray(parsed?.categories) ? parsed.categories : [];
+              const sess: any[] = Array.isArray(parsed?.sessions) ? parsed.sessions : [];
+              const idMap = new Map<string, string>();
+              if (cats.length) {
+                // Map by name to existing categories first
+                const existing = catsQuery.data ?? [];
+                const byName = new Map(existing.map((c) => [c.name.toLowerCase(), c.id]));
+                const toInsert = cats.filter((c) => !byName.has(String(c.name ?? "").toLowerCase()));
+                let inserted: any[] = [];
+                if (toInsert.length) {
+                  const rows = toInsert.map((c) => ({
+                    user_id: user.id, name: c.name, color: c.color ?? "#888",
+                  }));
+                  const { data } = await supabase.from("timer_categories").insert(rows).select("id,name");
+                  inserted = data ?? [];
+                }
+                for (const c of cats) {
+                  const newId = byName.get(String(c.name ?? "").toLowerCase())
+                    ?? inserted.find((x) => x.name === c.name)?.id;
+                  if (c.id && newId) idMap.set(c.id, newId);
+                }
+              }
+              if (sess.length) {
+                const rows = sess.map((s) => ({
+                  user_id: user.id,
+                  category_id: s.category_id ? (idMap.get(s.category_id) ?? null) : null,
+                  note: s.note ?? null,
+                  started_at: s.started_at,
+                  ended_at: s.ended_at ?? null,
+                  reminders_minutes: s.reminders_minutes ?? [],
+                }));
+                const { error } = await supabase.from("timer_sessions").insert(rows);
+                if (error) { toast.error(error.message); return; }
+              }
+              qc.invalidateQueries({ queryKey: ["timer-sessions", user.id] });
+              qc.invalidateQueries({ queryKey: ["timer-categories", user.id] });
+              toast.success(`${sess.length} sessão(ões) importada(s)`);
+            }}
+            className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg bg-input border border-border text-xs hover:border-primary/50"
+          >
+            <Upload className="h-3.5 w-3.5" /> Importar
+          </button>
+          <button
+            onClick={() => setCatManagerOpen(true)}
+            className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg bg-input border border-border text-xs hover:border-primary/50"
+          >
+            <TagsIcon className="h-3.5 w-3.5" /> Categorias
+          </button>
+        </div>
       </div>
 
       <section className="glass-card p-6 md:p-8">

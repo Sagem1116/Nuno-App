@@ -764,7 +764,7 @@ const BACKUP_TABLES: { table: DataTable; label: string }[] = [
 ];
 
 function BackupsPanel({ userId }: { userId: string | undefined }) {
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const exportAll = async () => {
