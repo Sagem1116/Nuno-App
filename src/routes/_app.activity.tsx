@@ -346,7 +346,27 @@ function UnclassifiedTab({ uid, logs, cats, projs, onChanged }: { uid: string; l
   );
 }
 
-function UnclassifiedRow({ uid, app, totalSec, entries, cats, projs, onChanged }: {
+function LastImportUnclassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string; allLogs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
+  const lastInfo = getLastImport("activity_logs");
+  const ids = useMemo(() => new Set(getLastImportIds("activity_logs")), [allLogs.length]);
+  const logs = useMemo(
+    () => allLogs.filter(l => !l.category_id && l.external_id && ids.has(l.external_id)),
+    [allLogs, ids],
+  );
+  if (!ids.size) return <div className="text-sm text-muted-foreground">Ainda não há registo do último import nesta sessão.</div>;
+  return (
+    <div className="space-y-3">
+      {lastInfo && (
+        <div className="text-xs text-muted-foreground">
+          Último import: <span className="font-medium text-foreground">{lastInfo.filename}</span> em {new Date(lastInfo.at).toLocaleString()} · {ids.size} evento(s) no ficheiro
+        </div>
+      )}
+      <UnclassifiedTab uid={uid} logs={logs} cats={cats} projs={projs} onChanged={onChanged} />
+    </div>
+  );
+}
+
+
   uid: string; app: string; totalSec: number; entries: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void;
 }) {
   const [catId, setCatId] = useState<string>("");
