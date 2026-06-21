@@ -366,7 +366,7 @@ function LastImportUnclassifiedTab({ uid, allLogs, cats, projs, onChanged }: { u
   );
 }
 
-
+function UnclassifiedRow({ uid, app, totalSec, entries, cats, projs, onChanged }: {
   uid: string; app: string; totalSec: number; entries: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void;
 }) {
   const [catId, setCatId] = useState<string>("");
