@@ -112,7 +112,15 @@ function ActivityPage() {
           <RulesTab uid={uid!} rules={rules.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_rules"] }); qc.invalidateQueries({ queryKey: ["activity_logs"] }); }} />
         </TabsContent>
         <TabsContent value="meta" className="mt-4">
-          <MetaTab uid={uid!} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_categories"] }); qc.invalidateQueries({ queryKey: ["activity_projects"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); qc.invalidateQueries({ queryKey: ["activity_logs"] }); }} />
+          <MetaTab uid={uid!} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={async () => {
+            await Promise.all([
+              qc.invalidateQueries({ queryKey: ["activity_categories"], refetchType: "all" }),
+              qc.invalidateQueries({ queryKey: ["activity_projects"], refetchType: "all" }),
+              qc.invalidateQueries({ queryKey: ["activity_rules"], refetchType: "all" }),
+              qc.invalidateQueries({ queryKey: ["activity_logs"], refetchType: "all" }),
+            ]);
+            await Promise.all([cats.refetch(), projs.refetch(), rules.refetch(), logs.refetch()]);
+          }} />
         </TabsContent>
         <TabsContent value="import" className="mt-4">
           <ImportTab uid={uid!} rules={rules.data ?? []} logs={logs.data ?? []} onImported={() => qc.invalidateQueries({ queryKey: ["activity_logs"] })} />
