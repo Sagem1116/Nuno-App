@@ -232,14 +232,11 @@ async function exportActivitySetup(opts?: { silent?: boolean }) {
   const error = cErr || pErr || rErr;
   if (error) { if (!opts?.silent) toast.error(error.message); return null; }
   const filename = `activity-setup-${stamp()}.json`;
-  downloadJson(filename, {
-    version: 1,
-    table: "activity_setup",
-    exported_at: new Date().toISOString(),
+  downloadJson(filename, buildEnvelope("activity_setup", {
     categories: categories ?? [],
     projects: projects ?? [],
     rules: rules ?? [],
-  });
+  }));
   const count = (categories ?? []).length + (projects ?? []).length + (rules ?? []).length;
   if (!opts?.silent) toast.success(`${count} item(s) de Activity exportados`);
   recordVersion("activity_setup", filename, count);
