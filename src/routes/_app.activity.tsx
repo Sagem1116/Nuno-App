@@ -186,9 +186,11 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2 items-center">
-        <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
+        <Select value={period} onValueChange={setPeriod}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="today">Hoje</SelectItem>
+            <SelectItem value="yesterday">Ontem</SelectItem>
             <SelectItem value="7">Últimos 7 dias</SelectItem>
             <SelectItem value="30">Últimos 30 dias</SelectItem>
             <SelectItem value="90">Últimos 90 dias</SelectItem>
