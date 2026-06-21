@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { pickJsonFile, exportData } from "@/lib/data-io";
+import { pickJsonFile, exportData, exportTable, importTable } from "@/lib/data-io";
 import { Trash2, Upload, Download, Plus, Wand2 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -106,7 +106,7 @@ function ActivityPage() {
           <RulesTab uid={uid!} rules={rules.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => qc.invalidateQueries({ queryKey: ["activity_rules"] })} />
         </TabsContent>
         <TabsContent value="meta" className="mt-4">
-          <MetaTab uid={uid!} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_categories"] }); qc.invalidateQueries({ queryKey: ["activity_projects"] }); }} />
+          <MetaTab uid={uid!} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_categories"] }); qc.invalidateQueries({ queryKey: ["activity_projects"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
         </TabsContent>
         <TabsContent value="import" className="mt-4">
           <ImportTab uid={uid!} rules={rules.data ?? []} logs={logs.data ?? []} onImported={() => qc.invalidateQueries({ queryKey: ["activity_logs"] })} />
@@ -543,6 +543,23 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
 function MetaTab({ uid, cats, projs, onChanged }: { uid: string; cats: Category[]; projs: Project[]; onChanged: () => void }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Card className="md:col-span-2">
+        <CardHeader><CardTitle className="text-base">Exportar / importar Activity</CardTitle></CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-2 text-sm">
+          <Button variant="outline" onClick={() => exportTable("activity_setup")}>
+            <Download className="h-4 w-4 mr-1" /> Exportar categorias, projetos e regras
+          </Button>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              await importTable("activity_setup", uid);
+              onChanged();
+            }}
+          >
+            <Upload className="h-4 w-4 mr-1" /> Importar JSON
+          </Button>
+        </CardContent>
+      </Card>
       <CategoriesList cats={cats} uid={uid} onChanged={onChanged} />
       <MetaList title="Projetos" items={projs} table="activity_projects" uid={uid} onChanged={onChanged} defaultColor="#10b981" />
     </div>
