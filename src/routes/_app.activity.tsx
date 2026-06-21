@@ -159,8 +159,8 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     const m = new Map<string, number>();
     for (const l of filtered) m.set(l.app_name || "—", (m.get(l.app_name || "—") ?? 0) + l.duration_seconds);
     return Array.from(m.entries())
-      .map(([name, sec]) => ({ name, hours: +(sec / 3600).toFixed(2) }))
-      .sort((a, b) => b.hours - a.hours)
+      .map(([name, sec]) => ({ name, seconds: sec }))
+      .sort((a, b) => b.seconds - a.seconds)
       .slice(0, 10);
   }, [filtered]);
 
