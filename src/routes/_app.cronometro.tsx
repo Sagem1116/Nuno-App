@@ -28,6 +28,7 @@ interface DbSession {
   note: string | null;
   started_at: string;
   ended_at: string | null;
+  reminders_minutes?: number[] | null;
 }
 interface Session {
   id: string;
