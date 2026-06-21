@@ -742,6 +742,7 @@ function ImportTab({ uid, rules, logs, onImported }: { uid: string; rules: Rule[
       }
       setPreview({ total: rows.length, matched, unmatched: rows.length - matched });
       recordImport("activity_logs", picked.filename);
+      recordLastImportIds("activity_logs", rows.map(r => r.external_id));
       setLastImport(getLastImport("activity_logs"));
       toast.success(`${rows.length} evento(s) importados`);
       onImported();
