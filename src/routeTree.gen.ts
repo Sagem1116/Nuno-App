@@ -33,6 +33,7 @@ import { Route as AppCronometroRouteImport } from './routes/_app.cronometro'
 import { Route as AppAtalhosRouteImport } from './routes/_app.atalhos'
 import { Route as AppAppsRouteImport } from './routes/_app.apps'
 import { Route as AppAiRouteImport } from './routes/_app.ai'
+import { Route as AppActivityRouteImport } from './routes/_app.activity'
 import { Route as AppViagensIndexRouteImport } from './routes/_app.viagens.index'
 import { Route as AppReservasIndexRouteImport } from './routes/_app.reservas.index'
 import { Route as AppDriveIndexRouteImport } from './routes/_app.drive.index'
@@ -167,6 +168,11 @@ const AppAiRoute = AppAiRouteImport.update({
   path: '/ai',
   getParentRoute: () => AppRoute,
 } as any)
+const AppActivityRoute = AppActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppViagensIndexRoute = AppViagensIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -242,6 +248,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/activity': typeof AppActivityRoute
   '/ai': typeof AppAiRouteWithChildren
   '/apps': typeof AppAppsRoute
   '/atalhos': typeof AppAtalhosRoute
@@ -281,6 +288,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/activity': typeof AppActivityRoute
   '/apps': typeof AppAppsRoute
   '/atalhos': typeof AppAtalhosRoute
   '/cronometro': typeof AppCronometroRoute
@@ -318,6 +326,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_app/activity': typeof AppActivityRoute
   '/_app/ai': typeof AppAiRouteWithChildren
   '/_app/apps': typeof AppAppsRoute
   '/_app/atalhos': typeof AppAtalhosRoute
@@ -359,6 +368,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
+    | '/activity'
     | '/ai'
     | '/apps'
     | '/atalhos'
@@ -398,6 +408,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
+    | '/activity'
     | '/apps'
     | '/atalhos'
     | '/cronometro'
@@ -434,6 +445,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/auth'
     | '/reset-password'
+    | '/_app/activity'
     | '/_app/ai'
     | '/_app/apps'
     | '/_app/atalhos'
@@ -653,6 +665,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAiRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/activity': {
+      id: '/_app/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof AppActivityRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/viagens/': {
       id: '/_app/viagens/'
       path: '/'
@@ -817,6 +836,7 @@ const AppViagensRouteWithChildren = AppViagensRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppActivityRoute: typeof AppActivityRoute
   AppAiRoute: typeof AppAiRouteWithChildren
   AppAppsRoute: typeof AppAppsRoute
   AppAtalhosRoute: typeof AppAtalhosRoute
@@ -836,6 +856,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppActivityRoute: AppActivityRoute,
   AppAiRoute: AppAiRouteWithChildren,
   AppAppsRoute: AppAppsRoute,
   AppAtalhosRoute: AppAtalhosRoute,

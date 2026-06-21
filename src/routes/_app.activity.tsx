@@ -315,7 +315,7 @@ function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChang
     if (!catId) { toast.error("Escolhe uma categoria"); return; }
     setBusy(true);
     try {
-      const patch: Record<string, unknown> = { category_id: catId };
+      const patch: { category_id: string; project_id?: string } = { category_id: catId };
       if (projId) patch.project_id = projId;
       const { error } = await supabase.from("activity_logs").update(patch).in("id", ids);
       if (error) throw error;
