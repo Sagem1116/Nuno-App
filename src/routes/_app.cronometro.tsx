@@ -826,9 +826,29 @@ function CronometroPage() {
         </div>
 
         <div className="glass-card p-5">
-          <h3 className="text-sm uppercase tracking-wider text-muted-foreground mb-4">
-            Distribuição por categoria
-          </h3>
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <h3 className="text-sm uppercase tracking-wider text-muted-foreground">
+              Distribuição {breakdownMode === "parent" ? "por categoria" : "por subcategoria"}
+            </h3>
+            <div className="flex gap-1 rounded-lg border border-border bg-card/60 p-0.5">
+              <button
+                onClick={() => setBreakdownMode("parent")}
+                className={`px-2 py-1 rounded-md text-[10px] font-medium uppercase tracking-wider transition-colors ${
+                  breakdownMode === "parent" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Categoria
+              </button>
+              <button
+                onClick={() => setBreakdownMode("sub")}
+                className={`px-2 py-1 rounded-md text-[10px] font-medium uppercase tracking-wider transition-colors ${
+                  breakdownMode === "sub" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Subcategoria
+              </button>
+            </div>
+          </div>
           {byCategory.length === 0 ? (
             <EmptyChart label="Sem dados" />
           ) : (
@@ -836,15 +856,15 @@ function CronometroPage() {
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie
-                    data={byCategory}
+                    data={breakdownMode === "parent" ? byCategory : bySubcategory}
                     dataKey="value"
-                    nameKey="name"
+                    nameKey={breakdownMode === "parent" ? "name" : "subName"}
                     innerRadius={55}
                     outerRadius={90}
                     paddingAngle={2}
                     stroke="var(--background)"
                   >
-                    {byCategory.map((c, i) => (
+                    {(breakdownMode === "parent" ? byCategory : bySubcategory).map((c: any, i) => (
                       <Cell key={i} fill={c.color} />
                     ))}
                   </Pie>
@@ -855,26 +875,51 @@ function CronometroPage() {
                       borderRadius: 8,
                       color: "var(--popover-foreground)",
                     }}
-                    formatter={(v: number) => fmtHoursShort(v)}
+                    formatter={(v: number, _n, item: any) => {
+                      const p = item?.payload;
+                      const label = breakdownMode === "sub" && p?.parentName && p?.parentName !== p?.subName
+                        ? `${p.parentName} › ${p.subName}`
+                        : (p?.name ?? p?.subName);
+                      return [fmtHoursShort(v), label];
+                    }}
                   />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="space-y-1.5 mt-2">
-                {byCategory.map((c) => {
-                  const pct = totalSec > 0 ? (c.value / totalSec) * 100 : 0;
-                  return (
-                    <div key={c.name} className="flex items-center gap-2 text-xs">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full shrink-0"
-                        style={{ background: c.color }}
-                      />
-                      <span className="flex-1 truncate">{c.name}</span>
-                      <span className="text-muted-foreground tabular-nums">
-                        {fmtHoursShort(c.value)} · {pct.toFixed(0)}%
-                      </span>
-                    </div>
-                  );
-                })}
+              <div className="space-y-1.5 mt-2 max-h-48 overflow-y-auto pr-1">
+                {breakdownMode === "parent"
+                  ? byCategory.map((c) => {
+                      const pct = totalSec > 0 ? (c.value / totalSec) * 100 : 0;
+                      return (
+                        <div key={c.name} className="flex items-center gap-2 text-xs">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full shrink-0"
+                            style={{ background: c.color }}
+                          />
+                          <span className="flex-1 truncate">{c.name}</span>
+                          <span className="text-muted-foreground tabular-nums">
+                            {fmtHoursShort(c.value)} · {pct.toFixed(0)}%
+                          </span>
+                        </div>
+                      );
+                    })
+                  : bySubcategory.map((c) => {
+                      const pct = totalSec > 0 ? (c.value / totalSec) * 100 : 0;
+                      return (
+                        <div key={c.key} className="flex items-center gap-2 text-xs">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full shrink-0"
+                            style={{ background: c.color }}
+                          />
+                          <span className="flex-1 truncate">
+                            <span className="text-muted-foreground">{c.parentName} › </span>
+                            {c.subName}
+                          </span>
+                          <span className="text-muted-foreground tabular-nums">
+                            {fmtHoursShort(c.value)} · {pct.toFixed(0)}%
+                          </span>
+                        </div>
+                      );
+                    })}
               </div>
             </>
           )}
