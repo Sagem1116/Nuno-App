@@ -179,20 +179,6 @@ function ReservasPage() {
                 className={inputCls + " resize-none"}
               />
 
-              <div className="border-2 border-dashed border-border rounded-lg p-4 hover:border-primary transition-colors cursor-pointer">
-                <label className="flex flex-col items-center gap-2 cursor-pointer">
-                  <FileUp className="h-6 w-6 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    {uploadFile ? uploadFile.name : "Clique para selecionar ficheiro"}
-                  </span>
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
-                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                    className="hidden"
-                  />
-                </label>
-              </div>
 
               <button
                 type="submit"
