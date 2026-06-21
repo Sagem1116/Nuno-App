@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Play, Square, Plus, Pencil, Trash2, X, Timer, Tags as TagsIcon, Loader2,
-  PictureInPicture2, Bell, BellOff, Download, Upload,
+  PictureInPicture2, Bell, BellOff, Download, Upload, Pause, ChevronRight,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
