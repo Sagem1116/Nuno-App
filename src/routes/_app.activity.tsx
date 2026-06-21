@@ -698,11 +698,12 @@ function parseAW(input: any): AWEvent[] {
 function ImportTab({ uid, rules, logs, onImported }: { uid: string; rules: Rule[]; logs: Log[]; onImported: () => void }) {
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<{ total: number; matched: number; unmatched: number } | null>(null);
+  const [lastImport, setLastImport] = useState(() => getLastImport("activity_logs"));
 
   async function doImport() {
-    const parsed = await pickJsonFile();
-    if (!parsed) return;
-    const events = parseAW(parsed);
+    const picked = await pickJsonFileWithName();
+    if (!picked) return;
+    const events = parseAW(picked.parsed);
     if (!events.length) { toast.error("Nenhum evento encontrado no JSON"); return; }
     setBusy(true);
     try {
@@ -735,6 +736,8 @@ function ImportTab({ uid, rules, logs, onImported }: { uid: string; rules: Rule[
         if (error) throw error;
       }
       setPreview({ total: rows.length, matched, unmatched: rows.length - matched });
+      recordImport("activity_logs", picked.filename);
+      setLastImport(getLastImport("activity_logs"));
       toast.success(`${rows.length} evento(s) importados`);
       onImported();
     } catch (e: any) { toast.error(e.message); }
@@ -760,6 +763,12 @@ function ImportTab({ uid, rules, logs, onImported }: { uid: string; rules: Rule[
           {preview && (
             <div className="text-sm">
               Importados: <b>{preview.total}</b> • Classificados automaticamente: <b>{preview.matched}</b> • Por classificar: <b>{preview.unmatched}</b>
+            </div>
+          )}
+          {lastImport && (
+            <div className="text-xs text-muted-foreground border-t border-border pt-2 mt-1">
+              Último import: <span className="font-medium text-foreground">{lastImport.filename}</span>{" "}
+              em {new Date(lastImport.at).toLocaleString()}
             </div>
           )}
         </CardContent>
