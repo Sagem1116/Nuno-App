@@ -470,13 +470,13 @@ function Dashboard() {
         </Panel>
 
         {/* Finance panel */}
-        <Panel title="Finanças do mês" icon={Wallet} to="/financas">
+        <Panel title={periodFilter === "all" ? "Finanças do mês" : periodFilter === "today" ? "Finanças de hoje" : "Finanças de ontem"} icon={Wallet} to="/financas">
           <div className="grid grid-cols-2 gap-2 mb-3">
             <Mini icon={TrendingUp} tone="good" label="Receitas" value={fmtEur(monthStats.income)} />
             <Mini icon={TrendingDown} tone="bad" label="Despesas" value={fmtEur(monthStats.expense)} />
           </div>
           {monthStats.topCats.length === 0 ? (
-            <Empty text="Sem transações este mês" />
+            <Empty text={periodFilter === "all" ? "Sem transações este mês" : periodFilter === "today" ? "Sem transações hoje" : "Sem transações ontem"} />
           ) : (
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground">Top categorias</div>
