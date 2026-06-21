@@ -35,9 +35,12 @@ type Log = {
 
 const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#14b8a6"];
 
-function fmtHours(sec: number) {
+function fmtDuration(sec: number) {
+  if (!sec || sec <= 0) return "0s";
+  if (sec < 60) return `${Math.round(sec)}s`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m`;
   const h = sec / 3600;
-  return h >= 10 ? `${h.toFixed(1)}h` : `${h.toFixed(2)}h`;
+  return h % 1 === 0 ? `${Math.round(h)}h` : `${h.toFixed(1)}h`;
 }
 
 function ActivityPage() {
@@ -139,7 +142,7 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     for (const l of filtered) m.set(l.category_id ?? "unclassified", (m.get(l.category_id ?? "unclassified") ?? 0) + l.duration_seconds);
     return Array.from(m.entries()).map(([id, sec], i) => {
       const c = cats.find(x => x.id === id);
-      return { name: c?.name ?? "Não classificado", value: +(sec / 3600).toFixed(2), color: c?.color ?? COLORS[i % COLORS.length] };
+      return { name: c?.name ?? "Não classificado", value: sec, color: c?.color ?? COLORS[i % COLORS.length] };
     }).sort((a, b) => b.value - a.value);
   }, [filtered, cats]);
 
@@ -148,7 +151,7 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     for (const l of filtered) if (l.project_id) m.set(l.project_id, (m.get(l.project_id) ?? 0) + l.duration_seconds);
     return Array.from(m.entries()).map(([id, sec], i) => {
       const p = projs.find(x => x.id === id);
-      return { name: p?.name ?? "—", value: +(sec / 3600).toFixed(2), color: p?.color ?? COLORS[i % COLORS.length] };
+      return { name: p?.name ?? "—", value: sec, color: p?.color ?? COLORS[i % COLORS.length] };
     }).sort((a, b) => b.value - a.value);
   }, [filtered, projs]);
 
@@ -156,8 +159,8 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     const m = new Map<string, number>();
     for (const l of filtered) m.set(l.app_name || "—", (m.get(l.app_name || "—") ?? 0) + l.duration_seconds);
     return Array.from(m.entries())
-      .map(([name, sec]) => ({ name, hours: +(sec / 3600).toFixed(2) }))
-      .sort((a, b) => b.hours - a.hours)
+      .map(([name, sec]) => ({ name, seconds: sec }))
+      .sort((a, b) => b.seconds - a.seconds)
       .slice(0, 10);
   }, [filtered]);
 
@@ -169,7 +172,7 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     }
     return Array.from(m.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, sec]) => ({ date: date.slice(5), hours: +(sec / 3600).toFixed(2) }));
+      .map(([date, sec]) => ({ date: date.slice(5), seconds: sec }));
   }, [filtered]);
 
   return (
@@ -203,8 +206,8 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Card><CardContent className="pt-6"><div className="text-xs text-muted-foreground">Total</div><div className="text-2xl font-semibold">{fmtHours(total)}</div></CardContent></Card>
-        <Card><CardContent className="pt-6"><div className="text-xs text-muted-foreground">Não classificado</div><div className="text-2xl font-semibold">{fmtHours(unclassified)}</div></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="text-xs text-muted-foreground">Total</div><div className="text-2xl font-semibold">{fmtDuration(total)}</div></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="text-xs text-muted-foreground">Não classificado</div><div className="text-2xl font-semibold">{fmtDuration(unclassified)}</div></CardContent></Card>
         <Card><CardContent className="pt-6"><div className="text-xs text-muted-foreground">Atividades</div><div className="text-2xl font-semibold">{filtered.length}</div></CardContent></Card>
       </div>
 
@@ -214,10 +217,10 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
           <CardContent style={{ height: 280 }}>
             <ResponsiveContainer>
               <PieChart>
-                <Pie data={byCat} dataKey="value" nameKey="name" outerRadius={90} label>
+                <Pie data={byCat} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
                   {byCat.map((d, i) => <Cell key={i} fill={d.color} />)}
                 </Pie>
-                <Tooltip />
+                <Tooltip formatter={(value: number) => fmtDuration(value)} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -229,10 +232,10 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             {byProj.length === 0 ? <div className="text-sm text-muted-foreground">Sem projetos atribuídos.</div> : (
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie data={byProj} dataKey="value" nameKey="name" outerRadius={90} label>
+                  <Pie data={byProj} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
                     {byProj.map((d, i) => <Cell key={i} fill={d.color} />)}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip formatter={(value: number) => fmtDuration(value)} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
@@ -246,9 +249,9 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
               <LineChart data={timeline}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="date" stroke="var(--muted-foreground)" />
-                <YAxis stroke="var(--muted-foreground)" />
-                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} />
-                <Line type="monotone" dataKey="hours" stroke="var(--primary)" strokeWidth={2} dot={false} />
+                <YAxis stroke="var(--muted-foreground)" tickFormatter={(v: number) => fmtDuration(v)} />
+                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} formatter={(value: number) => fmtDuration(value)} />
+                <Line type="monotone" dataKey="seconds" stroke="var(--primary)" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -259,10 +262,10 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             <ResponsiveContainer>
               <BarChart data={byApp} layout="vertical" margin={{ left: 80 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" stroke="var(--muted-foreground)" />
+                <XAxis type="number" stroke="var(--muted-foreground)" tickFormatter={(v: number) => fmtDuration(v)} />
                 <YAxis type="category" dataKey="name" stroke="var(--muted-foreground)" width={140} />
-                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} />
-                <Bar dataKey="hours" fill="var(--primary)" radius={[0, 4, 4, 0]} />
+                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} formatter={(value: number) => fmtDuration(value)} />
+                <Bar dataKey="seconds" fill="var(--primary)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -339,7 +342,7 @@ function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChang
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="font-medium">{app}</div>
-            <div className="text-xs text-muted-foreground">{ids.length} registo(s) • {fmtHours(totalSec)}</div>
+            <div className="text-xs text-muted-foreground">{ids.length} registo(s) • {fmtDuration(totalSec)}</div>
           </div>
         </div>
         {titles.length > 0 && (
