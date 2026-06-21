@@ -1,0 +1,2 @@
+ALTER TABLE public.activity_categories ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES public.activity_categories(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS activity_categories_parent_id_idx ON public.activity_categories(parent_id);
