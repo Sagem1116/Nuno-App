@@ -79,6 +79,29 @@ export function pickJsonFile(): Promise<unknown | null> {
   });
 }
 
+export type JsonFilePick = { parsed: unknown; filename: string } | null;
+
+export function pickJsonFileWithName(): Promise<JsonFilePick> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return resolve(null);
+      try {
+        const text = await file.text();
+        resolve({ parsed: JSON.parse(text), filename: file.name });
+      } catch (e) {
+        toast.error("Ficheiro JSON inválido");
+        resolve(null);
+      }
+    };
+    input.click();
+  });
+}
+
+
 const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 
 export type Table =
