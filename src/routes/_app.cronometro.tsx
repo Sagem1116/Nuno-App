@@ -1037,10 +1037,12 @@ function CategoryManager({
 }) {
   const [name, setName] = useState("");
   const [color, setColor] = useState("#ff7a18");
+  const [parentId, setParentId] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const used = new Set(sessions.map((s) => s.categoryId));
+  const parents = cats.filter((c) => !c.parentId);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -1051,17 +1053,18 @@ function CategoryManager({
       if (editingId) {
         const { error } = await supabase
           .from("timer_categories")
-          .update({ name: trimmed, color })
+          .update({ name: trimmed, color, parent_id: parentId || null })
           .eq("id", editingId);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("timer_categories")
-          .insert({ user_id: userId, name: trimmed, color });
+          .insert({ user_id: userId, name: trimmed, color, parent_id: parentId || null });
         if (error) throw error;
       }
       setName("");
       setColor("#ff7a18");
+      setParentId("");
       setEditingId(null);
       onChanged();
     } catch (err) {
@@ -1075,6 +1078,7 @@ function CategoryManager({
     setEditingId(c.id);
     setName(c.name);
     setColor(c.color);
+    setParentId(c.parentId ?? "");
   };
 
   const remove = async (c: Cat) => {
@@ -1095,7 +1099,7 @@ function CategoryManager({
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm p-4">
       <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="font-semibold">Categorias</h3>
+          <h3 className="font-semibold">Categorias e subcategorias</h3>
           <button
             onClick={onClose}
             className="p-1.5 rounded-md hover:bg-accent/40"
@@ -1119,6 +1123,25 @@ function CategoryManager({
               className="h-10 w-12 rounded-lg bg-input border border-border cursor-pointer"
             />
           </div>
+          <div>
+            <label className="text-[11px] uppercase tracking-widest text-muted-foreground">
+              Categoria-mãe (opcional)
+            </label>
+            <select
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+              className="mt-1 w-full px-3 py-2 rounded-lg bg-input border border-border text-sm"
+            >
+              <option value="">— Nenhuma (categoria principal) —</option>
+              {parents
+                .filter((p) => p.id !== editingId)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+          </div>
           <div className="flex gap-2">
             <button
               type="submit"
@@ -1134,6 +1157,7 @@ function CategoryManager({
                   setEditingId(null);
                   setName("");
                   setColor("#ff7a18");
+                  setParentId("");
                 }}
                 className="px-3 py-2 rounded-lg bg-input border border-border text-sm"
               >
@@ -1143,27 +1167,39 @@ function CategoryManager({
           </div>
         </form>
         <div className="max-h-80 overflow-y-auto p-3 space-y-1">
-          {cats.map((c) => (
-            <div
-              key={c.id}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent/30"
-            >
-              <span className="h-3 w-3 rounded-full" style={{ background: c.color }} />
-              <span className="flex-1 text-sm">{c.name}</span>
-              <button
-                onClick={() => edit(c)}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-              <button
-                onClick={() => remove(c)}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
+          {parents.map((p) => {
+            const subs = cats.filter((c) => c.parentId === p.id);
+            return (
+              <div key={p.id}>
+                <div className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent/30">
+                  <span className="h-3 w-3 rounded-full" style={{ background: p.color }} />
+                  <span className="flex-1 text-sm font-medium">{p.name}</span>
+                  <button onClick={() => edit(p)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => remove(p)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {subs.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center gap-3 pl-8 pr-3 py-1.5 rounded-lg hover:bg-accent/30"
+                  >
+                    <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: c.color }} />
+                    <span className="flex-1 text-sm text-muted-foreground">{c.name}</span>
+                    <button onClick={() => edit(c)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground">
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button onClick={() => remove(c)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive">
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
