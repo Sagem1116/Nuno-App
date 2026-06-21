@@ -94,6 +94,181 @@ export async function importTable(table: Table, userId: string) {
   toast.success(`${rows.length} item(s) importados`);
 }
 
+export async function importHierarchicalCategories(
+  table: "timer_categories" | "activity_categories",
+  items: any[],
+  userId: string,
+) {
+  const source = items.filter((c) => String(c?.name ?? "").trim());
+  const { data: existingData, error: existingError } = await (supabase as any)
+    .from(table)
+    .select("id,name,color,parent_id");
+  if (existingError) throw existingError;
+
+  const existing = (existingData ?? []) as Array<{ id: string; name: string; color: string; parent_id: string | null }>;
+  const idMap = new Map<string, string>();
+  const parentByName = new Map<string, string>();
+  const subByParentAndName = new Map<string, string>();
+  let inserted = 0;
+  let reused = 0;
+  let skipped = 0;
+
+  const key = (value: unknown) => String(value ?? "").trim().toLowerCase();
+  for (const c of existing) {
+    if (c.parent_id) subByParentAndName.set(`${c.parent_id}::${key(c.name)}`, c.id);
+    else parentByName.set(key(c.name), c.id);
+  }
+
+  const parents = source.filter((c) => !c.parent_id);
+  const children = source.filter((c) => c.parent_id);
+
+  for (const c of parents) {
+    const name = String(c.name).trim();
+    const oldId = String(c.id ?? "");
+    let newId = parentByName.get(key(name));
+    if (newId) {
+      reused += 1;
+    } else {
+      const { data, error } = await (supabase as any)
+        .from(table)
+        .insert({ user_id: userId, name, color: c.color ?? "#888", parent_id: null })
+        .select("id")
+        .single();
+      if (error) throw error;
+      newId = data.id;
+      parentByName.set(key(name), newId);
+      inserted += 1;
+    }
+    if (oldId && newId) idMap.set(oldId, newId);
+  }
+
+  for (const c of children) {
+    const name = String(c.name).trim();
+    const oldId = String(c.id ?? "");
+    const oldParentId = String(c.parent_id ?? "");
+    const parentNewId = idMap.get(oldParentId);
+    if (!parentNewId) {
+      skipped += 1;
+      continue;
+    }
+    const childKey = `${parentNewId}::${key(name)}`;
+    let newId = subByParentAndName.get(childKey);
+    if (newId) {
+      reused += 1;
+    } else {
+      const { data, error } = await (supabase as any)
+        .from(table)
+        .insert({ user_id: userId, name, color: c.color ?? "#888", parent_id: parentNewId })
+        .select("id")
+        .single();
+      if (error) throw error;
+      newId = data.id;
+      subByParentAndName.set(childKey, newId);
+      inserted += 1;
+    }
+    if (oldId && newId) idMap.set(oldId, newId);
+  }
+
+  return { idMap, inserted, reused, skipped };
+}
+
+async function exportActivitySetup(opts?: { silent?: boolean }) {
+  const [{ data: categories, error: cErr }, { data: projects, error: pErr }, { data: rules, error: rErr }] = await Promise.all([
+    (supabase as any).from("activity_categories").select("*").order("created_at", { ascending: true }),
+    (supabase as any).from("activity_projects").select("*").order("created_at", { ascending: true }),
+    (supabase as any).from("activity_rules").select("*").order("priority", { ascending: false }),
+  ]);
+  const error = cErr || pErr || rErr;
+  if (error) { if (!opts?.silent) toast.error(error.message); return null; }
+  const filename = `activity-setup-${stamp()}.json`;
+  downloadJson(filename, {
+    version: 1,
+    table: "activity_setup",
+    exported_at: new Date().toISOString(),
+    categories: categories ?? [],
+    projects: projects ?? [],
+    rules: rules ?? [],
+  });
+  const count = (categories ?? []).length + (projects ?? []).length + (rules ?? []).length;
+  if (!opts?.silent) toast.success(`${count} item(s) de Activity exportados`);
+  recordVersion("activity_setup", filename, count);
+  return filename;
+}
+
+async function importActivitySetup(userId: string, parsed: any) {
+  const categories = Array.isArray(parsed?.categories) ? parsed.categories : [];
+  const projects = Array.isArray(parsed?.projects) ? parsed.projects : [];
+  const rules = Array.isArray(parsed?.rules) ? parsed.rules : [];
+  if (!categories.length && !projects.length && !rules.length) {
+    toast.error("JSON de Activity sem categorias, projetos ou regras");
+    return;
+  }
+
+  try {
+    const catResult = categories.length
+      ? await importHierarchicalCategories("activity_categories", categories, userId)
+      : { idMap: new Map<string, string>(), inserted: 0, reused: 0, skipped: 0 };
+
+    const { data: existingProjects, error: pErr } = await (supabase as any)
+      .from("activity_projects")
+      .select("id,name,color");
+    if (pErr) throw pErr;
+    const key = (value: unknown) => String(value ?? "").trim().toLowerCase();
+    const projectByName = new Map<string, string>((existingProjects ?? []).map((p: any) => [key(p.name), p.id]));
+    const projectIdMap = new Map<string, string>();
+    let projectsInserted = 0;
+    let projectsReused = 0;
+    for (const p of projects.filter((p: any) => String(p?.name ?? "").trim())) {
+      const name = String(p.name).trim();
+      let id = projectByName.get(key(name));
+      if (id) {
+        projectsReused += 1;
+      } else {
+        const { data, error } = await (supabase as any)
+          .from("activity_projects")
+          .insert({ user_id: userId, name, color: p.color ?? "#10b981" })
+          .select("id")
+          .single();
+        if (error) throw error;
+        id = data.id;
+        projectByName.set(key(name), id);
+        projectsInserted += 1;
+      }
+      if (p.id && id) projectIdMap.set(String(p.id), id);
+    }
+
+    const { data: existingRules, error: rErr } = await (supabase as any)
+      .from("activity_rules")
+      .select("rule_type,pattern,category_id,project_id");
+    if (rErr) throw rErr;
+    const ruleKey = (r: any) => `${r.rule_type}::${key(r.pattern)}::${r.category_id ?? ""}::${r.project_id ?? ""}`;
+    const existingRuleKeys = new Set((existingRules ?? []).map(ruleKey));
+    const rows = rules
+      .filter((r: any) => r?.rule_type && String(r?.pattern ?? "").trim())
+      .map((r: any) => ({
+        user_id: userId,
+        rule_type: r.rule_type,
+        pattern: String(r.pattern).trim(),
+        category_id: r.category_id ? catResult.idMap.get(String(r.category_id)) ?? null : null,
+        project_id: r.project_id ? projectIdMap.get(String(r.project_id)) ?? null : null,
+        priority: Number(r.priority) || (r.rule_type === "app_name" ? 10 : 5),
+      }))
+      .filter((r: any) => !existingRuleKeys.has(ruleKey(r)));
+    if (rows.length) {
+      const { error } = await (supabase as any).from("activity_rules").insert(rows);
+      if (error) throw error;
+    }
+
+    toast.success(
+      `Activity importado: ${catResult.inserted} categoria(s), ${projectsInserted} projeto(s), ${rows.length} regra(s)`,
+    );
+    if (catResult.reused || projectsReused) toast.info(`${catResult.reused + projectsReused} item(s) já existiam`);
+    if (catResult.skipped) toast.warning(`${catResult.skipped} subcategoria(s) ignoradas por falta da categoria-mãe`);
+  } catch (e: any) {
+    toast.error(e.message ?? "Erro ao importar Activity");
+  }
+}
+
 export function exportData(filename: string, data: unknown) {
   downloadJson(`${filename}-${stamp()}.json`, data);
 }
@@ -207,7 +382,7 @@ function isDue(s: GlobalSchedule, now: Date): boolean {
   return false;
 }
 
-const ALL_TABLES: Table[] = ["notes", "links", "tasks", "transactions", "timer_categories", "timer_sessions"];
+const ALL_TABLES: Table[] = ["notes", "links", "tasks", "transactions", "timer_categories", "timer_sessions", "activity_setup"];
 
 async function runGlobalAutoExport() {
   const sched = getGlobalSchedule();
