@@ -15,6 +15,15 @@ import { useAuth } from "@/lib/auth";
 import { useNativeTimerMirror } from "@/lib/native-timer-mirror";
 import { downloadJson, pickJsonFile } from "@/lib/data-io";
 import { toast } from "sonner";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
 
 export const Route = createFileRoute("/_app/cronometro")({
   component: CronometroPage,
