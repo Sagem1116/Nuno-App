@@ -17,6 +17,7 @@ import {
   Mail,
   Keyboard,
   Timer,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
