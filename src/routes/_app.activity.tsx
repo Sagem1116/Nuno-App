@@ -543,7 +543,7 @@ function UnclassifiedRow({ uid, app, totalSec, entries, cats, projs, onChanged }
           <Select value={catId} onValueChange={setCatId}>
             <SelectTrigger><SelectValue placeholder="Categoria" /></SelectTrigger>
             <SelectContent>
-              {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.parent_id ? "↳ " : ""}{c.name}</SelectItem>)}
+              {renderCategoryOptions(cats)}
             </SelectContent>
           </Select>
           <Select value={projId} onValueChange={setProjId}>
@@ -967,7 +967,7 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
           <SelectTrigger className="w-52"><SelectValue placeholder="Categoria" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as categorias</SelectItem>
-            {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.parent_id ? "↳ " : ""}{c.name}</SelectItem>)}
+            {renderCategoryOptions(cats)}
           </SelectContent>
         </Select>
         <Select value={projFilter} onValueChange={(v) => { setProjFilter(v); setVisibleCount(50); }}>
@@ -1016,7 +1016,7 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
                             <SelectValue>{c ? <Badge style={{ backgroundColor: c.color, color: "white" }}>{c.name}</Badge> : "—"}</SelectValue>
                           </SelectTrigger>
                           <SelectContent>
-                            {cats.map(x => <SelectItem key={x.id} value={x.id}>{x.parent_id ? "↳ " : ""}{x.name}</SelectItem>)}
+                            {renderCategoryOptions(cats)}
                           </SelectContent>
                         </Select>
                       </td>
