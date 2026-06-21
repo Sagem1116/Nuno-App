@@ -137,7 +137,7 @@ function ActivityPage() {
           <UnclassifiedTab uid={uid!} allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_logs"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
         </TabsContent>
         <TabsContent value="classified" className="mt-4">
-          <ClassifiedTab allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => qc.invalidateQueries({ queryKey: ["activity_logs"] })} />
+          <ClassifiedTab uid={uid!} allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => qc.invalidateQueries({ queryKey: ["activity_logs"] })} />
         </TabsContent>
         <TabsContent value="rules" className="mt-4">
           <RulesTab uid={uid!} rules={rules.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_rules"] }); qc.invalidateQueries({ queryKey: ["activity_logs"] }); }} />
