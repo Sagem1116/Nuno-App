@@ -342,7 +342,7 @@ function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChang
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="font-medium">{app}</div>
-            <div className="text-xs text-muted-foreground">{ids.length} registo(s) • {fmtHours(totalSec)}</div>
+            <div className="text-xs text-muted-foreground">{ids.length} registo(s) • {fmtDuration(totalSec)}</div>
           </div>
         </div>
         {titles.length > 0 && (
