@@ -217,10 +217,10 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
           <CardContent style={{ height: 280 }}>
             <ResponsiveContainer>
               <PieChart>
-                <Pie data={byCat} dataKey="value" nameKey="name" outerRadius={90} label>
+                <Pie data={byCat} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
                   {byCat.map((d, i) => <Cell key={i} fill={d.color} />)}
                 </Pie>
-                <Tooltip />
+                <Tooltip formatter={(value: number) => fmtDuration(value)} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -232,10 +232,10 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             {byProj.length === 0 ? <div className="text-sm text-muted-foreground">Sem projetos atribuídos.</div> : (
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie data={byProj} dataKey="value" nameKey="name" outerRadius={90} label>
+                  <Pie data={byProj} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
                     {byProj.map((d, i) => <Cell key={i} fill={d.color} />)}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip formatter={(value: number) => fmtDuration(value)} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
@@ -249,9 +249,9 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
               <LineChart data={timeline}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="date" stroke="var(--muted-foreground)" />
-                <YAxis stroke="var(--muted-foreground)" />
-                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} />
-                <Line type="monotone" dataKey="hours" stroke="var(--primary)" strokeWidth={2} dot={false} />
+                <YAxis stroke="var(--muted-foreground)" tickFormatter={(v: number) => fmtDuration(v)} />
+                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} formatter={(value: number) => fmtDuration(value)} />
+                <Line type="monotone" dataKey="seconds" stroke="var(--primary)" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -262,10 +262,10 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             <ResponsiveContainer>
               <BarChart data={byApp} layout="vertical" margin={{ left: 80 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" stroke="var(--muted-foreground)" />
+                <XAxis type="number" stroke="var(--muted-foreground)" tickFormatter={(v: number) => fmtDuration(v)} />
                 <YAxis type="category" dataKey="name" stroke="var(--muted-foreground)" width={140} />
-                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} />
-                <Bar dataKey="hours" fill="var(--primary)" radius={[0, 4, 4, 0]} />
+                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} formatter={(value: number) => fmtDuration(value)} />
+                <Bar dataKey="seconds" fill="var(--primary)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
