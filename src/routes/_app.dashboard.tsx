@@ -92,6 +92,7 @@ function Dashboard() {
   const [newsDays, setNewsDays] = useState<number>(7);
   const [newsLastUpdated, setNewsLastUpdated] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
+  const [periodFilter, setPeriodFilter] = useState<"all" | "today" | "last_day">("all");
 
   const load = async () => {
     setLoading(true);
