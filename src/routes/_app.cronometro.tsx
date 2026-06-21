@@ -13,7 +13,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useNativeTimerMirror } from "@/lib/native-timer-mirror";
-import { downloadJson, importHierarchicalCategories, pickJsonFile } from "@/lib/data-io";
+import { buildEnvelope, downloadJson, importHierarchicalCategories, pickJsonFile, validateEnvelope } from "@/lib/data-io";
 import { toast } from "sonner";
 import {
   Table,
