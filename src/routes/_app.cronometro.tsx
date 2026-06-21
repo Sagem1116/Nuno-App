@@ -415,20 +415,31 @@ function CronometroPage() {
             <div className="text-5xl md:text-6xl font-mono font-bold neon-text tabular-nums">
               {fmtDuration(elapsedActive)}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => stopMut.mutate()}
-                disabled={stopMut.isPending}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-medium hover:shadow-glow-strong transition-all"
-              >
-                <Square className="h-4 w-4" /> Parar
-              </button>
-              <button
-                onClick={cancelActive}
-                className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-input border border-border text-sm hover:border-destructive/50 hover:text-destructive"
-              >
-                <X className="h-4 w-4" /> Descartar
-              </button>
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => stopMut.mutate()}
+                  disabled={stopMut.isPending}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-medium hover:shadow-glow-strong transition-all"
+                >
+                  <Square className="h-4 w-4" /> Parar
+                </button>
+                <button
+                  onClick={cancelActive}
+                  className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-input border border-border text-sm hover:border-destructive/50 hover:text-destructive"
+                >
+                  <X className="h-4 w-4" /> Descartar
+                </button>
+              </div>
+              <ActiveTimerExtras
+                sessionId={activeDb.id}
+                startedAt={activeStartedAt}
+                elapsed={elapsedActive}
+                categoryName={activeCat?.name ?? "—"}
+                categoryColor={activeCat?.color ?? "#888"}
+                note={activeDb.note ?? ""}
+                onStop={() => stopMut.mutate()}
+              />
             </div>
           </div>
         ) : (
