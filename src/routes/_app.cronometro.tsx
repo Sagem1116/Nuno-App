@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { useNativeTimerMirror } from "@/lib/native-timer-mirror";
 
 export const Route = createFileRoute("/_app/cronometro")({
   component: CronometroPage,
@@ -361,6 +362,20 @@ function CronometroPage() {
   const activeStartedAt = activeDb ? Date.parse(activeDb.started_at) : 0;
   const activeCat = activeDb?.category_id ? catById.get(activeDb.category_id) : undefined;
   const elapsedActive = activeDb ? Math.floor((tickNow - activeStartedAt) / 1000) : 0;
+
+  useNativeTimerMirror(
+    activeDb
+      ? {
+          active: true,
+          sessionId: activeDb.id,
+          categoryName: activeCat?.name ?? "—",
+          categoryColor: activeCat?.color ?? "#888",
+          note: activeDb.note ?? "",
+          startedAt: activeStartedAt,
+          reminders: activeDb.reminders_minutes ?? [],
+        }
+      : { active: false },
+  );
 
   if (authLoading || (!user && !authLoading)) {
     return (
