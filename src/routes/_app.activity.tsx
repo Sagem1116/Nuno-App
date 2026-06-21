@@ -35,9 +35,12 @@ type Log = {
 
 const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#14b8a6"];
 
-function fmtHours(sec: number) {
+function fmtDuration(sec: number) {
+  if (!sec || sec <= 0) return "0s";
+  if (sec < 60) return `${Math.round(sec)}s`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m`;
   const h = sec / 3600;
-  return h >= 10 ? `${h.toFixed(1)}h` : `${h.toFixed(2)}h`;
+  return h % 1 === 0 ? `${Math.round(h)}h` : `${h.toFixed(1)}h`;
 }
 
 function ActivityPage() {
