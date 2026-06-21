@@ -24,6 +24,7 @@ interface Cat {
   id: string;
   name: string;
   color: string;
+  parentId: string | null;
 }
 interface DbSession {
   id: string;
@@ -32,12 +33,17 @@ interface DbSession {
   started_at: string;
   ended_at: string | null;
   reminders_minutes?: number[] | null;
+  paused_at?: string | null;
+  paused_ms?: number | null;
 }
 interface Session {
   id: string;
   categoryId: string;
   categoryName: string;
   categoryColor: string;
+  parentId: string | null;
+  parentName: string;
+  parentColor: string;
   note: string;
   startedAt: number;
   endedAt: number;
