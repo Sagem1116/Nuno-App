@@ -1,6 +1,54 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+// Bump SCHEMA_VERSION whenever the JSON envelope or item shape changes in a
+// non-backward-compatible way. Importers warn when reading a higher version.
+export const APP_NAME = "nuno-stuff";
+export const SCHEMA_VERSION = 1;
+
+export type Envelope<T extends object = object> = {
+  app: typeof APP_NAME;
+  schema_version: number;
+  table: string;
+  exported_at: string;
+} & T;
+
+export function buildEnvelope<T extends object>(table: string, payload: T): Envelope<T> {
+  return {
+    app: APP_NAME,
+    schema_version: SCHEMA_VERSION,
+    table,
+    exported_at: new Date().toISOString(),
+    ...payload,
+  };
+}
+
+/**
+ * Validates an imported JSON envelope. Returns true if safe to proceed.
+ * - Missing schema_version → treated as legacy (version 1) with a soft notice.
+ * - Higher schema_version → blocks import with an error toast.
+ * - Mismatched table (when expectedTable provided) → soft warning, still proceeds.
+ */
+export function validateEnvelope(parsed: any, expectedTable?: string): boolean {
+  if (!parsed || typeof parsed !== "object") return true;
+  const ver = Number((parsed as any).schema_version ?? (parsed as any).version ?? 1);
+  if (!Number.isFinite(ver)) {
+    toast.error("Versão de schema inválida no ficheiro");
+    return false;
+  }
+  if (ver > SCHEMA_VERSION) {
+    toast.error(`Ficheiro com schema mais recente (v${ver}). Atualiza a app para importar.`);
+    return false;
+  }
+  if (ver < SCHEMA_VERSION) {
+    toast.info(`A importar schema antigo (v${ver}). A converter para v${SCHEMA_VERSION}.`);
+  }
+  if (expectedTable && (parsed as any).table && (parsed as any).table !== expectedTable) {
+    toast.warning(`O ficheiro indica "${(parsed as any).table}" mas esperava "${expectedTable}".`);
+  }
+  return true;
+}
+
 export function downloadJson(filename: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
