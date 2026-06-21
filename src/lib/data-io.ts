@@ -135,7 +135,8 @@ export async function importHierarchicalCategories(
         .select("id")
         .single();
       if (error) throw error;
-      newId = data.id;
+      newId = String(data?.id ?? "");
+      if (!newId) throw new Error("Não foi possível criar a categoria");
       parentByName.set(key(name), newId);
       inserted += 1;
     }
@@ -162,7 +163,8 @@ export async function importHierarchicalCategories(
         .select("id")
         .single();
       if (error) throw error;
-      newId = data.id;
+      newId = String(data?.id ?? "");
+      if (!newId) throw new Error("Não foi possível criar a subcategoria");
       subByParentAndName.set(childKey, newId);
       inserted += 1;
     }
@@ -230,7 +232,8 @@ async function importActivitySetup(userId: string, parsed: any) {
           .select("id")
           .single();
         if (error) throw error;
-        id = data.id;
+        id = String(data?.id ?? "");
+        if (!id) throw new Error("Não foi possível criar o projeto");
         projectByName.set(key(name), id);
         projectsInserted += 1;
       }
