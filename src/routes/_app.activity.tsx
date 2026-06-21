@@ -349,6 +349,22 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             </ResponsiveContainer>
           </CardContent>
         </Card>
+        {bySubCat.length > 0 && (
+          <Card className="lg:col-span-2">
+            <CardHeader><CardTitle className="text-base">Horas por subcategoria</CardTitle></CardHeader>
+            <CardContent style={{ height: 280 }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie data={bySubCat} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
+                    {bySubCat.map((d, i) => <Cell key={i} fill={d.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(value: number) => fmtDuration(value)} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
