@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { pickJsonFile, pickJsonFileWithName, exportData, exportTable, importTable, recordImport, getLastImport, recordLastImportIds, getLastImportIds } from "@/lib/data-io";
-import { Trash2, Upload, Download, Plus, Wand2, Pencil } from "lucide-react";
+import { Trash2, Upload, Download, Plus, Wand2, Pencil, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell, Legend, LineChart, Line,
@@ -43,6 +44,24 @@ function fmtDuration(sec: number) {
   if (sec < 3600) return `${Math.round(sec / 60)}m`;
   const h = sec / 3600;
   return h % 1 === 0 ? `${Math.round(h)}h` : `${h.toFixed(1)}h`;
+}
+
+function renderCategoryOptions(cats: Category[]) {
+  const parents = cats.filter(c => !c.parent_id);
+  const out: any[] = [];
+  for (const p of parents) {
+    out.push(<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>);
+    for (const s of cats.filter(c => c.parent_id === p.id)) {
+      out.push(<SelectItem key={s.id} value={s.id}>{"\u00A0\u00A0↳ "}{s.name}</SelectItem>);
+    }
+  }
+  // include orphan subs (parent missing) at end so nothing is hidden
+  for (const c of cats) {
+    if (c.parent_id && !parents.find(p => p.id === c.parent_id)) {
+      out.push(<SelectItem key={c.id} value={c.id}>↳ {c.name}</SelectItem>);
+    }
+  }
+  return out;
 }
 
 function ActivityPage() {
@@ -78,8 +97,20 @@ function ActivityPage() {
     queryKey: ["activity_logs", uid],
     enabled: !!uid,
     queryFn: async () => {
-      const { data, error } = await supabase.from("activity_logs").select("*").order("start_time", { ascending: false }).limit(5000);
-      if (error) throw error; return (data ?? []) as Log[];
+      // paginate to bypass PostgREST default 1000-row cap
+      const PAGE = 1000;
+      const all: Log[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from("activity_logs")
+          .select("*")
+          .order("start_time", { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        all.push(...((data ?? []) as Log[]));
+        if (!data || data.length < PAGE) break;
+      }
+      return all;
     },
   });
 
@@ -106,7 +137,7 @@ function ActivityPage() {
           <UnclassifiedTab uid={uid!} allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_logs"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
         </TabsContent>
         <TabsContent value="classified" className="mt-4">
-          <ClassifiedTab allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => qc.invalidateQueries({ queryKey: ["activity_logs"] })} />
+          <ClassifiedTab uid={uid!} allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => qc.invalidateQueries({ queryKey: ["activity_logs"] })} />
         </TabsContent>
         <TabsContent value="rules" className="mt-4">
           <RulesTab uid={uid!} rules={rules.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_rules"] }); qc.invalidateQueries({ queryKey: ["activity_logs"] }); }} />
@@ -305,22 +336,29 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             </ResponsiveContainer>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader><CardTitle className="text-base">Horas por projeto</CardTitle></CardHeader>
-          <CardContent style={{ height: 280 }}>
-            {byProj.length === 0 ? <div className="text-sm text-muted-foreground">Sem projetos atribuídos.</div> : (
+        {bySubCat.length > 0 ? (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Horas por subcategoria</CardTitle></CardHeader>
+            <CardContent style={{ height: 280 }}>
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie data={byProj} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
-                    {byProj.map((d, i) => <Cell key={i} fill={d.color} />)}
+                  <Pie data={bySubCat} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
+                    {bySubCat.map((d, i) => <Cell key={i} fill={d.color} />)}
                   </Pie>
                   <Tooltip formatter={(value: number) => fmtDuration(value)} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Horas por subcategoria</CardTitle></CardHeader>
+            <CardContent style={{ height: 280 }} className="flex items-center justify-center">
+              <div className="text-sm text-muted-foreground text-center">Seleciona uma categoria para ver as suas subcategorias.</div>
+            </CardContent>
+          </Card>
+        )}
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle className="text-base">Evolução temporal</CardTitle></CardHeader>
           <CardContent style={{ height: 260 }}>
@@ -349,22 +387,22 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             </ResponsiveContainer>
           </CardContent>
         </Card>
-        {bySubCat.length > 0 && (
-          <Card className="lg:col-span-2">
-            <CardHeader><CardTitle className="text-base">Horas por subcategoria</CardTitle></CardHeader>
-            <CardContent style={{ height: 280 }}>
+        <Card className="lg:col-span-2">
+          <CardHeader><CardTitle className="text-base">Horas por projeto</CardTitle></CardHeader>
+          <CardContent style={{ height: 280 }}>
+            {byProj.length === 0 ? <div className="text-sm text-muted-foreground">Sem projetos atribuídos.</div> : (
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie data={bySubCat} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
-                    {bySubCat.map((d, i) => <Cell key={i} fill={d.color} />)}
+                  <Pie data={byProj} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
+                    {byProj.map((d, i) => <Cell key={i} fill={d.color} />)}
                   </Pie>
                   <Tooltip formatter={(value: number) => fmtDuration(value)} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -380,6 +418,7 @@ function UnclassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string
   const [scope, setScope] = useState<Scope>(lastIds.size ? "last-import" : "7d");
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(20);
+  const [deleting, setDeleting] = useState(false);
 
   const scoped = useMemo(() => {
     const unclassified = allLogs.filter(l => !l.category_id);
@@ -411,6 +450,17 @@ function UnclassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string
   const totalSec = useMemo(() => scoped.reduce((a, l) => a + l.duration_seconds, 0), [scoped]);
   const visible = groups.slice(0, visibleCount);
 
+  async function deleteAllUnclassified() {
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from("activity_logs").delete().eq("user_id", uid).is("category_id", null);
+      if (error) throw error;
+      toast.success("Atividades por classificar apagadas");
+      onChanged();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setDeleting(false); }
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -424,6 +474,23 @@ function UnclassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string
           </SelectContent>
         </Select>
         <Input placeholder="Filtrar por aplicação…" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(20); }} className="w-64" />
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" disabled={deleting} className="text-destructive">
+              <Trash2 className="h-4 w-4 mr-1" /> Apagar todas por classificar
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Apagar TODAS as atividades por classificar?</AlertDialogTitle>
+              <AlertDialogDescription>Esta ação remove permanentemente todos os registos sem categoria atribuída. Não pode ser desfeita.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={deleteAllUnclassified}>Apagar tudo</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <div className="text-xs text-muted-foreground ml-auto">
           {scoped.length} evento(s) • {groups.length} app(s) • {fmtDuration(totalSec)}
         </div>
@@ -505,7 +572,7 @@ function UnclassifiedRow({ uid, app, totalSec, entries, cats, projs, onChanged }
           <Select value={catId} onValueChange={setCatId}>
             <SelectTrigger><SelectValue placeholder="Categoria" /></SelectTrigger>
             <SelectContent>
-              {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.parent_id ? "↳ " : ""}{c.name}</SelectItem>)}
+              {renderCategoryOptions(cats)}
             </SelectContent>
           </Select>
           <Select value={projId} onValueChange={setProjId}>
@@ -643,7 +710,7 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
           <Input placeholder="padrão (ex.: Code.exe)" value={pattern} onChange={(e) => setPattern(e.target.value)} />
           <Select value={catId} onValueChange={setCatId}>
             <SelectTrigger><SelectValue placeholder="Categoria" /></SelectTrigger>
-            <SelectContent>{cats.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+            <SelectContent>{renderCategoryOptions(cats)}</SelectContent>
           </Select>
           <Select value={projId} onValueChange={setProjId}>
             <SelectTrigger><SelectValue placeholder="Projeto (opcional)" /></SelectTrigger>
@@ -872,13 +939,24 @@ function EditMetaDialog({ table, item, parents, onChanged }: {
 
 // ---------- Classified ----------
 
-function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
+type SortKey = "when" | "app" | "category" | "project" | "duration";
+type SortDir = "asc" | "desc";
+
+function ClassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string; allLogs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
   const [scope, setScope] = useState<"7d" | "30d" | "all">("7d");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [projFilter, setProjFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(50);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("when");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function toggleSort(k: SortKey) {
+    if (sortKey === k) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(k); setSortDir(k === "when" || k === "duration" ? "desc" : "asc"); }
+  }
 
   const filtered = useMemo(() => {
     let arr = allLogs.filter(l => l.category_id);
@@ -894,7 +972,24 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
     return arr;
   }, [allLogs, scope, catFilter, projFilter, search]);
 
-  const visible = filtered.slice(0, visibleCount);
+  const sorted = useMemo(() => {
+    const catName = (id: string | null) => cats.find(c => c.id === id)?.name ?? "";
+    const projName = (id: string | null) => projs.find(p => p.id === id)?.name ?? "";
+    const cmp = (a: Log, b: Log) => {
+      let r = 0;
+      switch (sortKey) {
+        case "when": r = new Date(a.start_time).getTime() - new Date(b.start_time).getTime(); break;
+        case "app": r = (a.app_name || "").localeCompare(b.app_name || ""); break;
+        case "category": r = catName(a.category_id).localeCompare(catName(b.category_id)); break;
+        case "project": r = projName(a.project_id).localeCompare(projName(b.project_id)); break;
+        case "duration": r = a.duration_seconds - b.duration_seconds; break;
+      }
+      return sortDir === "asc" ? r : -r;
+    };
+    return [...filtered].sort(cmp);
+  }, [filtered, sortKey, sortDir, cats, projs]);
+
+  const visible = sorted.slice(0, visibleCount);
   const totalSec = filtered.reduce((a, l) => a + l.duration_seconds, 0);
 
   async function unclassify(id: string) {
@@ -914,6 +1009,32 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
     onChanged();
   }
 
+  async function deleteAllClassified() {
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from("activity_logs").delete().eq("user_id", uid).not("category_id", "is", null);
+      if (error) throw error;
+      toast.success("Atividades classificadas apagadas");
+      onChanged();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setDeleting(false); }
+  }
+
+  const SortHeader = ({ k, label, align }: { k: SortKey; label: string; align?: "right" }) => (
+    <th className={`p-2 ${align === "right" ? "text-right" : ""}`}>
+      <button
+        type="button"
+        onClick={() => toggleSort(k)}
+        className={`inline-flex items-center gap-1 hover:text-foreground ${sortKey === k ? "text-foreground" : ""}`}
+      >
+        {label}
+        {sortKey === k
+          ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
+          : <ArrowUpDown className="h-3 w-3 opacity-50" />}
+      </button>
+    </th>
+  );
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -929,7 +1050,7 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
           <SelectTrigger className="w-52"><SelectValue placeholder="Categoria" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as categorias</SelectItem>
-            {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.parent_id ? "↳ " : ""}{c.name}</SelectItem>)}
+            {renderCategoryOptions(cats)}
           </SelectContent>
         </Select>
         <Select value={projFilter} onValueChange={(v) => { setProjFilter(v); setVisibleCount(50); }}>
@@ -941,6 +1062,23 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
           </SelectContent>
         </Select>
         <Input placeholder="Procurar app ou título…" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(50); }} className="w-64" />
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" disabled={deleting} className="text-destructive">
+              <Trash2 className="h-4 w-4 mr-1" /> Apagar todas classificadas
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Apagar TODAS as atividades classificadas?</AlertDialogTitle>
+              <AlertDialogDescription>Esta ação remove permanentemente todos os registos que já têm categoria. Não pode ser desfeita.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={deleteAllClassified}>Apagar tudo</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <div className="text-xs text-muted-foreground ml-auto">
           {filtered.length} registo(s) • {fmtDuration(totalSec)}
         </div>
@@ -954,11 +1092,11 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
             <table className="w-full text-sm">
               <thead className="border-b border-border">
                 <tr className="text-left text-xs text-muted-foreground">
-                  <th className="p-2">Quando</th>
-                  <th className="p-2">App / Título</th>
-                  <th className="p-2">Categoria</th>
-                  <th className="p-2">Projeto</th>
-                  <th className="p-2 text-right">Duração</th>
+                  <SortHeader k="when" label="Quando" />
+                  <SortHeader k="app" label="App / Título" />
+                  <SortHeader k="category" label="Categoria" />
+                  <SortHeader k="project" label="Projeto" />
+                  <SortHeader k="duration" label="Duração" align="right" />
                   <th className="p-2"></th>
                 </tr>
               </thead>
@@ -978,7 +1116,7 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
                             <SelectValue>{c ? <Badge style={{ backgroundColor: c.color, color: "white" }}>{c.name}</Badge> : "—"}</SelectValue>
                           </SelectTrigger>
                           <SelectContent>
-                            {cats.map(x => <SelectItem key={x.id} value={x.id}>{x.parent_id ? "↳ " : ""}{x.name}</SelectItem>)}
+                            {renderCategoryOptions(cats)}
                           </SelectContent>
                         </Select>
                       </td>
@@ -1006,10 +1144,10 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
         </Card>
       )}
 
-      {filtered.length > visible.length && (
+      {sorted.length > visible.length && (
         <div className="flex justify-center">
           <Button variant="outline" size="sm" onClick={() => setVisibleCount(c => c + 50)}>
-            Mostrar mais ({filtered.length - visible.length} restantes)
+            Mostrar mais ({sorted.length - visible.length} restantes)
           </Button>
         </div>
       )}
