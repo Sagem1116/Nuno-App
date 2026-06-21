@@ -1005,3 +1005,287 @@ function SessionEditor({
     </div>
   );
 }
+
+// ============================================================
+// Floating PiP window + reminder notifications
+// ============================================================
+
+const REMINDER_PRESETS = [
+  { label: "Sem lembrete", minutes: 0 },
+  { label: "30 min", minutes: 30 },
+  { label: "1 h", minutes: 60 },
+  { label: "1 h 30", minutes: 90 },
+  { label: "2 h", minutes: 120 },
+];
+
+function ActiveTimerExtras({
+  sessionId,
+  startedAt,
+  elapsed,
+  categoryName,
+  categoryColor,
+  note,
+  onStop,
+}: {
+  sessionId: string;
+  startedAt: number;
+  elapsed: number;
+  categoryName: string;
+  categoryColor: string;
+  note: string;
+  onStop: () => void;
+}) {
+  const storageKey = `cron-reminder-${sessionId}`;
+  const [reminderMin, setReminderMin] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    const stored = window.localStorage.getItem(storageKey);
+    if (stored) return Number(stored) || 0;
+    const last = Number(window.localStorage.getItem("cron-reminder-last")) || 0;
+    return last;
+  });
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customVal, setCustomVal] = useState("");
+  const firedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(storageKey, String(reminderMin));
+    window.localStorage.setItem("cron-reminder-last", String(reminderMin));
+    firedRef.current = false;
+  }, [reminderMin, storageKey]);
+
+  // Fire notification when elapsed reaches reminderMin
+  useEffect(() => {
+    if (!reminderMin || firedRef.current) return;
+    if (elapsed >= reminderMin * 60) {
+      firedRef.current = true;
+      const title = `⏱ ${categoryName}`;
+      const body = `Já passaram ${reminderMin >= 60 ? `${Math.floor(reminderMin / 60)}h${reminderMin % 60 ? ` ${reminderMin % 60}m` : ""}` : `${reminderMin}m`}${note ? ` · ${note}` : ""}`;
+      try {
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification(title, { body, tag: `timer-${sessionId}` });
+        }
+      } catch {}
+      try {
+        // small audible cue
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.frequency.value = 880; g.gain.value = 0.05;
+        o.start(); setTimeout(() => { o.stop(); ctx.close(); }, 350);
+      } catch {}
+    }
+  }, [elapsed, reminderMin, categoryName, note, sessionId]);
+
+  const enableNotifications = async () => {
+    if (!("Notification" in window)) {
+      alert("Este browser não suporta notificações.");
+      return;
+    }
+    if (Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+  };
+
+  const handleSelect = (v: string) => {
+    if (v === "custom") { setCustomOpen(true); return; }
+    setReminderMin(Number(v));
+    if (Number(v) > 0) void enableNotifications();
+  };
+
+  const saveCustom = () => {
+    const n = Math.max(1, Math.floor(Number(customVal) || 0));
+    if (n > 0) {
+      setReminderMin(n);
+      void enableNotifications();
+    }
+    setCustomOpen(false);
+    setCustomVal("");
+  };
+
+  const isPreset = REMINDER_PRESETS.some((p) => p.minutes === reminderMin);
+  const selectValue = reminderMin === 0 ? "0" : isPreset ? String(reminderMin) : "custom";
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <FloatingWindowButton
+          startedAt={startedAt}
+          categoryName={categoryName}
+          categoryColor={categoryColor}
+          note={note}
+          onStop={onStop}
+        />
+        <div className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-input border border-border text-xs">
+          {reminderMin > 0 ? <Bell className="h-3.5 w-3.5 text-primary" /> : <BellOff className="h-3.5 w-3.5 text-muted-foreground" />}
+          <select
+            value={selectValue}
+            onChange={(e) => handleSelect(e.target.value)}
+            className="bg-transparent outline-none text-xs"
+          >
+            {REMINDER_PRESETS.map((p) => (
+              <option key={p.minutes} value={String(p.minutes)}>{p.label}</option>
+            ))}
+            {!isPreset && reminderMin > 0 && (
+              <option value="custom">{reminderMin} min (custom)</option>
+            )}
+            <option value="custom">Personalizado…</option>
+          </select>
+        </div>
+      </div>
+      {customOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setCustomOpen(false)}>
+          <div className="glass-card p-5 w-full max-w-xs space-y-3" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold">Lembrete personalizado</h3>
+            <label className="text-xs text-muted-foreground">Minutos após o início</label>
+            <input
+              autoFocus
+              type="number"
+              min={1}
+              value={customVal}
+              onChange={(e) => setCustomVal(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") saveCustom(); }}
+              placeholder="ex: 45"
+              className="w-full px-3 py-2 rounded-lg bg-input border border-border text-sm"
+            />
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setCustomOpen(false)} className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs">Cancelar</button>
+              <button onClick={saveCustom} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs">Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function FloatingWindowButton({
+  startedAt,
+  categoryName,
+  categoryColor,
+  note,
+  onStop,
+}: {
+  startedAt: number;
+  categoryName: string;
+  categoryColor: string;
+  note: string;
+  onStop: () => void;
+}) {
+  const [pipWin, setPipWin] = useState<Window | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const supportsDocPiP = typeof window !== "undefined" && "documentPictureInPicture" in window;
+
+  useEffect(() => {
+    if (!pipWin) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [pipWin]);
+
+  const open = async () => {
+    if (!supportsDocPiP) {
+      alert(
+        "O teu browser não suporta janela flutuante (Document Picture-in-Picture). Usa Chrome/Edge atualizados em desktop."
+      );
+      return;
+    }
+    try {
+      const w: Window = await (window as any).documentPictureInPicture.requestWindow({
+        width: 280,
+        height: 160,
+      });
+      // copy styles
+      [...document.styleSheets].forEach((sheet) => {
+        try {
+          const rules = [...sheet.cssRules].map((r) => r.cssText).join("\n");
+          const style = w.document.createElement("style");
+          style.textContent = rules;
+          w.document.head.appendChild(style);
+        } catch {
+          if (sheet.href) {
+            const link = w.document.createElement("link");
+            link.rel = "stylesheet";
+            link.href = sheet.href;
+            w.document.head.appendChild(link);
+          }
+        }
+      });
+      w.document.documentElement.classList.add(document.documentElement.classList.contains("dark") ? "dark" : "light");
+      w.document.title = "Cronómetro";
+      w.addEventListener("pagehide", () => setPipWin(null));
+      setPipWin(w);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const close = () => {
+    pipWin?.close();
+    setPipWin(null);
+  };
+
+  const elapsed = Math.floor((now - startedAt) / 1000);
+
+  return (
+    <>
+      <button
+        onClick={pipWin ? close : open}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-input border border-border text-xs hover:border-primary/50"
+        title={supportsDocPiP ? "Janela flutuante" : "Não suportado neste browser"}
+      >
+        <PictureInPicture2 className="h-3.5 w-3.5" />
+        {pipWin ? "Fechar janela" : "Janela flutuante"}
+      </button>
+      {pipWin && createPortal(
+        <div
+          style={{
+            margin: 0,
+            height: "100vh",
+            display: "flex",
+            flexDirection: "column",
+            background: "hsl(var(--background))",
+            color: "hsl(var(--foreground))",
+            fontFamily: "ui-sans-serif, system-ui, sans-serif",
+            padding: "12px 14px",
+            gap: 8,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 999, background: categoryColor }} />
+            <span style={{ fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{categoryName}</span>
+          </div>
+          {note && (
+            <div style={{ fontSize: 11, opacity: 0.7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note}</div>
+          )}
+          <div style={{
+            fontSize: 38,
+            fontWeight: 700,
+            fontVariantNumeric: "tabular-nums",
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            textAlign: "center",
+            lineHeight: 1.1,
+          }}>
+            {fmtDuration(elapsed)}
+          </div>
+          <button
+            onClick={() => { onStop(); close(); }}
+            style={{
+              marginTop: "auto",
+              padding: "8px 12px",
+              borderRadius: 10,
+              border: "none",
+              background: "hsl(var(--primary))",
+              color: "hsl(var(--primary-foreground))",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Parar
+          </button>
+        </div>,
+        pipWin.document.body,
+      )}
+    </>
+  );
+}
