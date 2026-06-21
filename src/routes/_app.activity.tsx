@@ -316,13 +316,13 @@ function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChang
     setBusy(true);
     try {
       const patch: { category_id: string; project_id?: string } = { category_id: catId };
-      if (projId) patch.project_id = projId;
+      if (projId && projId !== "__none__") patch.project_id = projId;
       const { error } = await supabase.from("activity_logs").update(patch).in("id", ids);
       if (error) throw error;
       if (makeRule && pattern.trim()) {
         const { error: rErr } = await supabase.from("activity_rules").insert({
           user_id: uid, rule_type: ruleType, pattern: pattern.trim(),
-          category_id: catId, project_id: projId || null,
+          category_id: catId, project_id: projId && projId !== "__none__" ? projId : null,
           priority: ruleType === "app_name" ? 10 : 5,
         });
         if (rErr) throw rErr;
@@ -398,7 +398,7 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
     if (!pattern.trim() || !catId) { toast.error("Preenche padrão e categoria"); return; }
     const { error } = await supabase.from("activity_rules").insert({
       user_id: uid, rule_type: ruleType, pattern: pattern.trim(),
-      category_id: catId, project_id: projId || null,
+      category_id: catId, project_id: projId && projId !== "__none__" ? projId : null,
       priority: ruleType === "app_name" ? 10 : 5,
     });
     if (error) { toast.error(error.message); return; }
