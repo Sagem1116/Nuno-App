@@ -264,9 +264,42 @@ function CronometroPage() {
   const stopMut = useMutation({
     mutationFn: async () => {
       if (!activeDb) return;
+      const now = Date.now();
+      // If currently paused, finalize paused_ms with the time spent paused so far and clear paused_at.
+      const wasPaused = !!activeDb.paused_at;
+      const extraPaused = wasPaused ? now - Date.parse(activeDb.paused_at!) : 0;
       const { error } = await supabase
         .from("timer_sessions")
-        .update({ ended_at: new Date().toISOString() })
+        .update({
+          ended_at: new Date(now).toISOString(),
+          paused_at: null,
+          paused_ms: (activeDb.paused_ms ?? 0) + extraPaused,
+        })
+        .eq("id", activeDb.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["timer-sessions", user?.id] }),
+  });
+
+  const pauseMut = useMutation({
+    mutationFn: async () => {
+      if (!activeDb || activeDb.paused_at) return;
+      const { error } = await supabase
+        .from("timer_sessions")
+        .update({ paused_at: new Date().toISOString() })
+        .eq("id", activeDb.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["timer-sessions", user?.id] }),
+  });
+
+  const resumeMut = useMutation({
+    mutationFn: async () => {
+      if (!activeDb || !activeDb.paused_at) return;
+      const extra = Date.now() - Date.parse(activeDb.paused_at);
+      const { error } = await supabase
+        .from("timer_sessions")
+        .update({ paused_at: null, paused_ms: (activeDb.paused_ms ?? 0) + extra })
         .eq("id", activeDb.id);
       if (error) throw error;
     },
