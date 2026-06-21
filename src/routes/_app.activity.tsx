@@ -418,6 +418,7 @@ function UnclassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string
   const [scope, setScope] = useState<Scope>(lastIds.size ? "last-import" : "7d");
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(20);
+  const [deleting, setDeleting] = useState(false);
 
   const scoped = useMemo(() => {
     const unclassified = allLogs.filter(l => !l.category_id);
@@ -449,6 +450,17 @@ function UnclassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string
   const totalSec = useMemo(() => scoped.reduce((a, l) => a + l.duration_seconds, 0), [scoped]);
   const visible = groups.slice(0, visibleCount);
 
+  async function deleteAllUnclassified() {
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from("activity_logs").delete().eq("user_id", uid).is("category_id", null);
+      if (error) throw error;
+      toast.success("Atividades por classificar apagadas");
+      onChanged();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setDeleting(false); }
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -462,6 +474,23 @@ function UnclassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string
           </SelectContent>
         </Select>
         <Input placeholder="Filtrar por aplicação…" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(20); }} className="w-64" />
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" disabled={deleting} className="text-destructive">
+              <Trash2 className="h-4 w-4 mr-1" /> Apagar todas por classificar
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Apagar TODAS as atividades por classificar?</AlertDialogTitle>
+              <AlertDialogDescription>Esta ação remove permanentemente todos os registos sem categoria atribuída. Não pode ser desfeita.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={deleteAllUnclassified}>Apagar tudo</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <div className="text-xs text-muted-foreground ml-auto">
           {scoped.length} evento(s) • {groups.length} app(s) • {fmtDuration(totalSec)}
         </div>
