@@ -8,7 +8,7 @@ import { format, isToday, isPast, parseISO, differenceInCalendarDays, isValid } 
 import { pt } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { exportData, exportTable, importTable, type Table as DataTable } from "@/lib/data-io";
+import { exportData, exportTable, importTable, getGlobalSchedule, setGlobalSchedule, type Table as DataTable, type Frequency } from "@/lib/data-io";
 import { AutoExportMenu } from "@/components/auto-export-menu";
 import { NotificationsSettings } from "@/components/notifications-settings";
 import { NotepadViewer } from "@/components/notepad-viewer";
