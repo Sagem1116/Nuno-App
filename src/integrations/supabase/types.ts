@@ -525,6 +525,7 @@ export type Database = {
           ended_at: string | null
           id: string
           note: string | null
+          reminders_minutes: number[]
           started_at: string
           updated_at: string
           user_id: string
@@ -535,6 +536,7 @@ export type Database = {
           ended_at?: string | null
           id?: string
           note?: string | null
+          reminders_minutes?: number[]
           started_at: string
           updated_at?: string
           user_id: string
@@ -545,6 +547,7 @@ export type Database = {
           ended_at?: string | null
           id?: string
           note?: string | null
+          reminders_minutes?: number[]
           started_at?: string
           updated_at?: string
           user_id?: string
