@@ -1,11 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
-import { Plus, Trash2, FileUp, AlertCircle, Loader } from "lucide-react";
+import { Plus, Trash2, AlertCircle, Loader } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { inputCls } from "./_app.notas";
-import { extractReservation } from "@/lib/reservations.functions";
 
 export const Route = createFileRoute("/_app/reservas/")({
   component: ReservasPage,
@@ -49,9 +47,7 @@ function ReservasPage() {
   const [confirmation, setConfirmation] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const extract = useServerFn(extractReservation);
 
   const load = async () => {
     if (!user) return;
@@ -77,19 +73,6 @@ function ReservasPage() {
     if (user) load();
   }, [user]);
 
-  const processDocument = async (file: File): Promise<any> => {
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        resolve(result.split(",")[1]);
-      };
-      reader.onerror = () => reject(new Error("Failed to read file"));
-      reader.readAsDataURL(file);
-    });
-    const documentType: "image" | "pdf" = file.type.startsWith("image") ? "image" : "pdf";
-    return await extract({ data: { base64, mimeType: file.type || "application/octet-stream", documentType } });
-  };
 
   const addReservation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,16 +85,6 @@ function ReservasPage() {
       setError(null);
       setUploading(true);
 
-      let extractedData = null;
-      let extractionConfidence = null;
-
-      // Process document if uploaded
-      if (uploadFile) {
-        const processed = await processDocument(uploadFile);
-        extractedData = processed?.data || null;
-        extractionConfidence = processed?.confidence || null;
-      }
-
       const { data, error: err } = await (supabase as any)
         .from("reservations")
         .insert({
@@ -121,8 +94,8 @@ function ReservasPage() {
           confirmation_number: confirmation.trim() || null,
           notes: notes.trim(),
           status: "pending",
-          extracted_data: extractedData,
-          extraction_confidence: extractionConfidence,
+          extracted_data: null,
+          extraction_confidence: null,
         })
         .select()
         .single();
@@ -134,7 +107,6 @@ function ReservasPage() {
         setTitle("");
         setConfirmation("");
         setNotes("");
-        setUploadFile(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao criar reserva");
@@ -207,20 +179,6 @@ function ReservasPage() {
                 className={inputCls + " resize-none"}
               />
 
-              <div className="border-2 border-dashed border-border rounded-lg p-4 hover:border-primary transition-colors cursor-pointer">
-                <label className="flex flex-col items-center gap-2 cursor-pointer">
-                  <FileUp className="h-6 w-6 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    {uploadFile ? uploadFile.name : "Clique para selecionar ficheiro"}
-                  </span>
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
-                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                    className="hidden"
-                  />
-                </label>
-              </div>
 
               <button
                 type="submit"
