@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { pickJsonFile, exportData, exportTable, importTable } from "@/lib/data-io";
+import { pickJsonFileWithName, exportData, exportTable, recordImport, getLastImport, type Table } from "@/lib/data-io";
 import { Trash2, Upload, Download, Plus, Wand2 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
