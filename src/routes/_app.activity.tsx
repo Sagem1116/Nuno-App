@@ -316,16 +316,17 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
 function UnclassifiedTab({ uid, logs, cats, projs, onChanged }: { uid: string; logs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
   // Group by app_name for batch classification
   const groups = useMemo(() => {
-    const m = new Map<string, { app: string; titles: Set<string>; total: number; ids: string[] }>();
+    const m = new Map<string, { app: string; total: number; entries: Log[] }>();
     for (const l of logs) {
       const k = l.app_name || "—";
-      const g = m.get(k) ?? { app: k, titles: new Set(), total: 0, ids: [] };
-      g.titles.add(l.window_title);
+      const g = m.get(k) ?? { app: k, total: 0, entries: [] };
       g.total += l.duration_seconds;
-      g.ids.push(l.id);
+      g.entries.push(l);
       m.set(k, g);
     }
-    return Array.from(m.values()).sort((a, b) => b.total - a.total);
+    return Array.from(m.values())
+      .map(g => ({ ...g, entries: g.entries.sort((a, b) => b.duration_seconds - a.duration_seconds) }))
+      .sort((a, b) => b.total - a.total);
   }, [logs]);
 
   if (!logs.length) return <div className="text-sm text-muted-foreground">Não há atividades por classificar 🎉</div>;
@@ -334,14 +335,14 @@ function UnclassifiedTab({ uid, logs, cats, projs, onChanged }: { uid: string; l
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{logs.length} atividade(s) sem categoria, agrupadas por aplicação.</p>
       {groups.map(g => (
-        <UnclassifiedRow key={g.app} uid={uid} app={g.app} totalSec={g.total} titles={Array.from(g.titles).slice(0, 5)} ids={g.ids} cats={cats} projs={projs} onChanged={onChanged} />
+        <UnclassifiedRow key={g.app} uid={uid} app={g.app} totalSec={g.total} entries={g.entries} cats={cats} projs={projs} onChanged={onChanged} />
       ))}
     </div>
   );
 }
 
-function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChanged }: {
-  uid: string; app: string; totalSec: number; titles: string[]; ids: string[]; cats: Category[]; projs: Project[]; onChanged: () => void;
+function UnclassifiedRow({ uid, app, totalSec, entries, cats, projs, onChanged }: {
+  uid: string; app: string; totalSec: number; entries: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void;
 }) {
   const [catId, setCatId] = useState<string>("");
   const [projId, setProjId] = useState<string>("");
@@ -349,8 +350,9 @@ function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChang
   const [ruleType, setRuleType] = useState<"app_name" | "window_title_contains">("app_name");
   const [pattern, setPattern] = useState<string>(app);
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-  async function apply() {
+  async function applyTo(ids: string[], makeRuleNow: boolean) {
     if (!catId) { toast.error("Escolhe uma categoria"); return; }
     setBusy(true);
     try {
@@ -358,7 +360,7 @@ function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChang
       if (projId && projId !== "__none__") patch.project_id = projId;
       const { error } = await supabase.from("activity_logs").update(patch).in("id", ids);
       if (error) throw error;
-      if (makeRule && pattern.trim()) {
+      if (makeRuleNow && pattern.trim()) {
         const { error: rErr } = await supabase.from("activity_rules").insert({
           user_id: uid, rule_type: ruleType, pattern: pattern.trim(),
           category_id: catId, project_id: projId && projId !== "__none__" ? projId : null,
@@ -378,19 +380,17 @@ function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChang
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="font-medium">{app}</div>
-            <div className="text-xs text-muted-foreground">{ids.length} registo(s) • {fmtDuration(totalSec)}</div>
+            <div className="text-xs text-muted-foreground">{entries.length} registo(s) • {fmtDuration(totalSec)}</div>
           </div>
+          <Button variant="ghost" size="sm" onClick={() => setExpanded(v => !v)}>
+            {expanded ? "Ocultar entradas" : "Ver entradas"}
+          </Button>
         </div>
-        {titles.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {titles.map((t, i) => <Badge key={i} variant="secondary" className="font-normal text-xs max-w-xs truncate">{t || "(sem título)"}</Badge>)}
-          </div>
-        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <Select value={catId} onValueChange={setCatId}>
             <SelectTrigger><SelectValue placeholder="Categoria" /></SelectTrigger>
             <SelectContent>
-              {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.parent_id ? "↳ " : ""}{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={projId} onValueChange={setProjId}>
@@ -418,8 +418,25 @@ function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChang
               <Input value={pattern} onChange={(e) => setPattern(e.target.value)} className="w-64" placeholder="padrão" />
             </>
           )}
-          <Button size="sm" onClick={apply} disabled={busy}><Wand2 className="h-4 w-4 mr-1" /> Aplicar</Button>
+          <Button size="sm" onClick={() => applyTo(entries.map(e => e.id), makeRule)} disabled={busy}>
+            <Wand2 className="h-4 w-4 mr-1" /> Aplicar a todos ({entries.length})
+          </Button>
         </div>
+        {expanded && (
+          <div className="space-y-1 border-t border-border pt-2 max-h-80 overflow-y-auto">
+            {entries.map(e => (
+              <div key={e.id} className="flex items-center justify-between gap-2 text-xs py-1 px-2 rounded hover:bg-accent/50">
+                <div className="flex-1 min-w-0">
+                  <div className="truncate">{e.window_title || "(sem título)"}</div>
+                  <div className="text-muted-foreground">{new Date(e.start_time).toLocaleString()} • {fmtDuration(e.duration_seconds)}</div>
+                </div>
+                <Button size="sm" variant="outline" disabled={busy || !catId} onClick={() => applyTo([e.id], false)}>
+                  Classificar
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
