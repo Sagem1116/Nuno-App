@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { pickJsonFile, pickJsonFileWithName, exportData, exportTable, importTable, recordImport, getLastImport, recordLastImportIds, getLastImportIds } from "@/lib/data-io";
-import { Trash2, Upload, Download, Plus, Wand2 } from "lucide-react";
+import { Trash2, Upload, Download, Plus, Wand2, Pencil } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell, Legend, LineChart, Line,
@@ -92,6 +93,7 @@ function ActivityPage() {
         <TabsList>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="unclassified">Por classificar</TabsTrigger>
+          <TabsTrigger value="classified">Classificadas</TabsTrigger>
           <TabsTrigger value="rules">Regras</TabsTrigger>
           <TabsTrigger value="meta">Categorias & Projetos</TabsTrigger>
           <TabsTrigger value="import">Importar</TabsTrigger>
@@ -103,11 +105,14 @@ function ActivityPage() {
         <TabsContent value="unclassified" className="mt-4">
           <UnclassifiedTab uid={uid!} allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_logs"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
         </TabsContent>
+        <TabsContent value="classified" className="mt-4">
+          <ClassifiedTab allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => qc.invalidateQueries({ queryKey: ["activity_logs"] })} />
+        </TabsContent>
         <TabsContent value="rules" className="mt-4">
-          <RulesTab uid={uid!} rules={rules.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => qc.invalidateQueries({ queryKey: ["activity_rules"] })} />
+          <RulesTab uid={uid!} rules={rules.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_rules"] }); qc.invalidateQueries({ queryKey: ["activity_logs"] }); }} />
         </TabsContent>
         <TabsContent value="meta" className="mt-4">
-          <MetaTab uid={uid!} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_categories"] }); qc.invalidateQueries({ queryKey: ["activity_projects"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
+          <MetaTab uid={uid!} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_categories"] }); qc.invalidateQueries({ queryKey: ["activity_projects"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); qc.invalidateQueries({ queryKey: ["activity_logs"] }); }} />
         </TabsContent>
         <TabsContent value="import" className="mt-4">
           <ImportTab uid={uid!} rules={rules.data ?? []} logs={logs.data ?? []} onImported={() => qc.invalidateQueries({ queryKey: ["activity_logs"] })} />
@@ -523,19 +528,51 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
     onChanged();
   }
   async function reapplyAll() {
-    const { data: allLogs, error: le } = await supabase.from("activity_logs").select("id, app_name, window_title");
-    if (le) { toast.error(le.message); return; }
-    const { data: allRules, error: re } = await supabase.from("activity_rules").select("*").order("priority", { ascending: false });
-    if (re) { toast.error(re.message); return; }
-    let n = 0;
-    for (const l of allLogs ?? []) {
-      const m = matchRule(l.app_name, l.window_title, (allRules ?? []) as Rule[]);
-      if (m) {
-        await supabase.from("activity_logs").update({ category_id: m.category_id, project_id: m.project_id }).eq("id", l.id);
-        n++;
+    try {
+      // paginate logs (Supabase default cap is 1000 per request)
+      const PAGE = 1000;
+      const all: { id: string; app_name: string; window_title: string }[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from("activity_logs")
+          .select("id, app_name, window_title")
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        all.push(...(data ?? []));
+        if (!data || data.length < PAGE) break;
       }
+      const { data: allRules, error: re } = await supabase
+        .from("activity_rules").select("*").order("priority", { ascending: false });
+      if (re) throw re;
+
+      // group ids by (category_id|project_id) and bulk update
+      const buckets = new Map<string, { cat: string; proj: string | null; ids: string[] }>();
+      for (const l of all) {
+        const m = matchRule(l.app_name, l.window_title, (allRules ?? []) as Rule[]);
+        if (!m || !m.category_id) continue;
+        const key = `${m.category_id}|${m.project_id ?? ""}`;
+        const b = buckets.get(key) ?? { cat: m.category_id, proj: m.project_id, ids: [] };
+        b.ids.push(l.id);
+        buckets.set(key, b);
+      }
+      let n = 0;
+      for (const b of buckets.values()) {
+        // chunk .in() to avoid URL-length limits
+        for (let i = 0; i < b.ids.length; i += 500) {
+          const slice = b.ids.slice(i, i + 500);
+          const { error } = await supabase
+            .from("activity_logs")
+            .update({ category_id: b.cat, project_id: b.proj })
+            .in("id", slice);
+          if (error) throw error;
+          n += slice.length;
+        }
+      }
+      toast.success(`Re-aplicado em ${n} registo(s)`);
+      onChanged();
+    } catch (e: any) {
+      toast.error(e.message ?? "Erro ao re-aplicar regras");
     }
-    toast.success(`Re-aplicado em ${n} registo(s)`); onChanged();
   }
 
   return (
@@ -663,12 +700,18 @@ function CategoriesList({ cats, uid, onChanged }: { cats: Category[]; uid: strin
             <div key={p.id}>
               <div className="flex items-center justify-between p-2 rounded border border-border">
                 <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: p.color }} />{p.name}</div>
-                <Button variant="ghost" size="icon" onClick={() => del(p.id)}><Trash2 className="h-4 w-4" /></Button>
+                <div className="flex items-center gap-1">
+                  <EditMetaDialog table="activity_categories" item={p} parents={parents} onChanged={onChanged} />
+                  <Button variant="ghost" size="icon" onClick={() => del(p.id)}><Trash2 className="h-4 w-4" /></Button>
+                </div>
               </div>
               {cats.filter(c => c.parent_id === p.id).map(s => (
                 <div key={s.id} className="flex items-center justify-between p-2 ml-6 rounded border border-border mt-1">
                   <div className="flex items-center gap-2 text-sm"><span className="text-muted-foreground">↳</span><span className="h-3 w-3 rounded-full" style={{ backgroundColor: s.color }} />{s.name}</div>
-                  <Button variant="ghost" size="icon" onClick={() => del(s.id)}><Trash2 className="h-4 w-4" /></Button>
+                  <div className="flex items-center gap-1">
+                    <EditMetaDialog table="activity_categories" item={s} parents={parents} onChanged={onChanged} />
+                    <Button variant="ghost" size="icon" onClick={() => del(s.id)}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -710,13 +753,214 @@ function MetaList({ title, items, table, uid, onChanged, defaultColor }: {
           {items.map(i => (
             <div key={i.id} className="flex items-center justify-between p-2 rounded border border-border">
               <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: i.color }} />{i.name}</div>
-              <Button variant="ghost" size="icon" onClick={() => del(i.id)}><Trash2 className="h-4 w-4" /></Button>
+              <div className="flex items-center gap-1">
+                <EditMetaDialog table={table} item={i} onChanged={onChanged} />
+                <Button variant="ghost" size="icon" onClick={() => del(i.id)}><Trash2 className="h-4 w-4" /></Button>
+              </div>
             </div>
           ))}
           {!items.length && <div className="text-sm text-muted-foreground">Vazio.</div>}
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function EditMetaDialog({ table, item, parents, onChanged }: {
+  table: "activity_categories" | "activity_projects";
+  item: { id: string; name: string; color: string; parent_id?: string | null };
+  parents?: Category[];
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(item.name);
+  const [color, setColor] = useState(item.color);
+  const [parentId, setParentId] = useState<string>(item.parent_id ?? "__none__");
+
+  async function save() {
+    const patch: any = { name: name.trim(), color };
+    if (table === "activity_categories") patch.parent_id = parentId === "__none__" ? null : parentId;
+    const { error } = await supabase.from(table).update(patch).eq("id", item.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Atualizado");
+    setOpen(false);
+    onChanged();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v) { setName(item.name); setColor(item.color); setParentId(item.parent_id ?? "__none__"); } }}>
+      <Button variant="ghost" size="icon" onClick={() => setOpen(true)}><Pencil className="h-4 w-4" /></Button>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Editar</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome" />
+          <div className="flex items-center gap-2">
+            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded border border-input bg-transparent" />
+            <span className="text-sm text-muted-foreground">Cor</span>
+          </div>
+          {table === "activity_categories" && parents && (
+            <Select value={parentId} onValueChange={setParentId}>
+              <SelectTrigger><SelectValue placeholder="Categoria-mãe" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sem mãe</SelectItem>
+                {parents.filter(p => p.id !== item.id).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+          <Button onClick={save}>Guardar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------- Classified ----------
+
+function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
+  const [scope, setScope] = useState<"7d" | "30d" | "all">("7d");
+  const [catFilter, setCatFilter] = useState<string>("all");
+  const [projFilter, setProjFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+  const [visibleCount, setVisibleCount] = useState(50);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const filtered = useMemo(() => {
+    let arr = allLogs.filter(l => l.category_id);
+    if (scope !== "all") {
+      const days = scope === "7d" ? 7 : 30;
+      const cutoff = Date.now() - days * 86400_000;
+      arr = arr.filter(l => new Date(l.start_time).getTime() >= cutoff);
+    }
+    if (catFilter !== "all") arr = arr.filter(l => l.category_id === catFilter);
+    if (projFilter !== "all") arr = arr.filter(l => (l.project_id ?? "__none__") === projFilter);
+    const q = search.trim().toLowerCase();
+    if (q) arr = arr.filter(l => (l.app_name || "").toLowerCase().includes(q) || (l.window_title || "").toLowerCase().includes(q));
+    return arr;
+  }, [allLogs, scope, catFilter, projFilter, search]);
+
+  const visible = filtered.slice(0, visibleCount);
+  const totalSec = filtered.reduce((a, l) => a + l.duration_seconds, 0);
+
+  async function unclassify(id: string) {
+    setBusyId(id);
+    const { error } = await supabase.from("activity_logs").update({ category_id: null, project_id: null }).eq("id", id);
+    setBusyId(null);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Removida classificação");
+    onChanged();
+  }
+
+  async function updateLog(id: string, patch: { category_id?: string | null; project_id?: string | null }) {
+    setBusyId(id);
+    const { error } = await supabase.from("activity_logs").update(patch).eq("id", id);
+    setBusyId(null);
+    if (error) { toast.error(error.message); return; }
+    onChanged();
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={scope} onValueChange={(v) => { setScope(v as any); setVisibleCount(50); }}>
+          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7d">Últimos 7 dias</SelectItem>
+            <SelectItem value="30d">Últimos 30 dias</SelectItem>
+            <SelectItem value="all">Tudo</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={catFilter} onValueChange={(v) => { setCatFilter(v); setVisibleCount(50); }}>
+          <SelectTrigger className="w-52"><SelectValue placeholder="Categoria" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as categorias</SelectItem>
+            {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.parent_id ? "↳ " : ""}{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={projFilter} onValueChange={(v) => { setProjFilter(v); setVisibleCount(50); }}>
+          <SelectTrigger className="w-48"><SelectValue placeholder="Projeto" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os projetos</SelectItem>
+            <SelectItem value="__none__">Sem projeto</SelectItem>
+            {projs.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Input placeholder="Procurar app ou título…" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(50); }} className="w-64" />
+        <div className="text-xs text-muted-foreground ml-auto">
+          {filtered.length} registo(s) • {fmtDuration(totalSec)}
+        </div>
+      </div>
+
+      {!filtered.length ? (
+        <div className="text-sm text-muted-foreground">Sem atividades classificadas neste filtro.</div>
+      ) : (
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border">
+                <tr className="text-left text-xs text-muted-foreground">
+                  <th className="p-2">Quando</th>
+                  <th className="p-2">App / Título</th>
+                  <th className="p-2">Categoria</th>
+                  <th className="p-2">Projeto</th>
+                  <th className="p-2 text-right">Duração</th>
+                  <th className="p-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map(l => {
+                  const c = cats.find(x => x.id === l.category_id);
+                  return (
+                    <tr key={l.id} className="border-b border-border/50 hover:bg-accent/30">
+                      <td className="p-2 whitespace-nowrap text-xs text-muted-foreground">{new Date(l.start_time).toLocaleString()}</td>
+                      <td className="p-2 min-w-0 max-w-md">
+                        <div className="truncate font-medium">{l.app_name || "—"}</div>
+                        <div className="truncate text-xs text-muted-foreground">{l.window_title}</div>
+                      </td>
+                      <td className="p-2">
+                        <Select value={l.category_id ?? ""} onValueChange={(v) => updateLog(l.id, { category_id: v })}>
+                          <SelectTrigger className="h-8 w-44">
+                            <SelectValue>{c ? <Badge style={{ backgroundColor: c.color, color: "white" }}>{c.name}</Badge> : "—"}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {cats.map(x => <SelectItem key={x.id} value={x.id}>{x.parent_id ? "↳ " : ""}{x.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="p-2">
+                        <Select value={l.project_id ?? "__none__"} onValueChange={(v) => updateLog(l.id, { project_id: v === "__none__" ? null : v })}>
+                          <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Sem projeto</SelectItem>
+                            {projs.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="p-2 text-right whitespace-nowrap">{fmtDuration(l.duration_seconds)}</td>
+                      <td className="p-2 text-right">
+                        <Button size="sm" variant="ghost" disabled={busyId === l.id} onClick={() => unclassify(l.id)} title="Remover classificação">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {filtered.length > visible.length && (
+        <div className="flex justify-center">
+          <Button variant="outline" size="sm" onClick={() => setVisibleCount(c => c + 50)}>
+            Mostrar mais ({filtered.length - visible.length} restantes)
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 
