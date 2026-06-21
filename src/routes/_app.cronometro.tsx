@@ -948,6 +948,8 @@ function CronometroPage() {
                       borderRadius: 8,
                       color: "var(--popover-foreground)",
                     }}
+                    itemStyle={{ color: "var(--popover-foreground)" }}
+                    labelStyle={{ color: "var(--popover-foreground)" }}
                     formatter={(v: number, _n, item: any) => {
                       const p = item?.payload;
                       const label = breakdownMode === "sub" && p?.parentName && p?.parentName !== p?.subName
