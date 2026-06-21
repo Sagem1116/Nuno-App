@@ -357,7 +357,7 @@ function UnclassifiedRow({ uid, app, totalSec, titles, ids, cats, projs, onChang
           <Select value={projId} onValueChange={setProjId}>
             <SelectTrigger><SelectValue placeholder="Projeto (opcional)" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Sem projeto</SelectItem>
+              <SelectItem value="__none__">Sem projeto</SelectItem>
               {projs.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -445,7 +445,7 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
           <Select value={projId} onValueChange={setProjId}>
             <SelectTrigger><SelectValue placeholder="Projeto (opcional)" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Sem projeto</SelectItem>
+              <SelectItem value="__none__">Sem projeto</SelectItem>
               {projs.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
             </SelectContent>
           </Select>
