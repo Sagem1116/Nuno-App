@@ -529,7 +529,7 @@ async function runGlobalAutoExport() {
 
 const IMPORT_KEY = "imports:v1";
 
-type ImportEntry = { table: Table; filename: string; at: number };
+type ImportEntry = { table: ImportTable; filename: string; at: number };
 
 function readImports(): ImportEntry[] {
   try { return JSON.parse(localStorage.getItem(IMPORT_KEY) || "[]"); } catch { return []; }
@@ -539,13 +539,13 @@ function writeImports(entries: ImportEntry[]) {
   localStorage.setItem(IMPORT_KEY, JSON.stringify(entries.slice(0, 100)));
 }
 
-export function recordImport(table: Table, filename: string) {
+export function recordImport(table: ImportTable, filename: string) {
   const entries = readImports();
   entries.unshift({ table, filename, at: Date.now() });
   writeImports(entries);
 }
 
-export function getLastImport(table: Table): { filename: string; at: number } | null {
+export function getLastImport(table: ImportTable): { filename: string; at: number } | null {
   return readImports().find((e) => e.table === table) ?? null;
 }
 
