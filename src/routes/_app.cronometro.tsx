@@ -662,18 +662,36 @@ function CronometroPage() {
           </div>
         ) : (
           <div className="flex flex-col md:flex-row md:items-end gap-4">
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-[14rem_1fr] gap-3">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-[10rem_10rem_1fr] gap-3">
               <div>
                 <label className="text-[11px] uppercase tracking-widest text-muted-foreground">
                   Categoria
                 </label>
                 <select
+                  value={pickerParentId}
+                  onChange={(e) => setPickerParentId(e.target.value)}
+                  className="mt-1 w-full px-3 py-2.5 rounded-lg bg-input border border-border text-sm"
+                >
+                  {parentCats.length === 0 && <option value="">— sem categorias —</option>}
+                  {parentCats.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                  Subcategoria
+                </label>
+                <select
                   value={pickerCatId}
                   onChange={(e) => setPickerCatId(e.target.value)}
                   className="mt-1 w-full px-3 py-2.5 rounded-lg bg-input border border-border text-sm"
+                  disabled={!pickerParentId}
                 >
-                  {cats.length === 0 && <option value="">— sem categorias —</option>}
-                  {cats.map((c) => (
+                  <option value={pickerParentId}>— (nenhuma) —</option>
+                  {subCatsOf(pickerParentId).map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
@@ -694,7 +712,7 @@ function CronometroPage() {
                   }}
                 />
               </div>
-              <div className="md:col-span-2">
+              <div className="md:col-span-3">
                 <label className="text-[11px] uppercase tracking-widest text-muted-foreground">
                   Lembretes (notificação após o início) · podes escolher vários
                 </label>
