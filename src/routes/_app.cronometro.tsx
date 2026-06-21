@@ -1031,130 +1031,86 @@ function SessionEditor({
 // Floating PiP window + reminder notifications
 // ============================================================
 
-const REMINDER_PRESETS = [
-  { label: "Sem lembrete", minutes: 0 },
-  { label: "30 min", minutes: 30 },
-  { label: "1 h", minutes: 60 },
-  { label: "1 h 30", minutes: 90 },
-  { label: "2 h", minutes: 120 },
-];
+const REMINDER_PRESETS = [15, 30, 45, 60, 90, 120, 180];
 
-function ActiveTimerExtras({
-  sessionId,
-  startedAt,
-  elapsed,
-  categoryName,
-  categoryColor,
-  note,
-  onStop,
+function fmtMinutes(m: number) {
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    const rem = m % 60;
+    return rem ? `${h}h ${rem}m` : `${h}h`;
+  }
+  return `${m} min`;
+}
+
+async function ensureNotificationPermission() {
+  if (typeof window === "undefined" || !("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+  const res = await Notification.requestPermission();
+  return res === "granted";
+}
+
+function RemindersPicker({
+  value,
+  onChange,
 }: {
-  sessionId: string;
-  startedAt: number;
-  elapsed: number;
-  categoryName: string;
-  categoryColor: string;
-  note: string;
-  onStop: () => void;
+  value: number[];
+  onChange: (v: number[]) => void;
 }) {
-  const storageKey = `cron-reminder-${sessionId}`;
-  const [reminderMin, setReminderMin] = useState<number>(() => {
-    if (typeof window === "undefined") return 0;
-    const stored = window.localStorage.getItem(storageKey);
-    if (stored) return Number(stored) || 0;
-    const last = Number(window.localStorage.getItem("cron-reminder-last")) || 0;
-    return last;
-  });
   const [customOpen, setCustomOpen] = useState(false);
   const [customVal, setCustomVal] = useState("");
-  const firedRef = useRef(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(storageKey, String(reminderMin));
-    window.localStorage.setItem("cron-reminder-last", String(reminderMin));
-    firedRef.current = false;
-  }, [reminderMin, storageKey]);
-
-  // Fire notification when elapsed reaches reminderMin
-  useEffect(() => {
-    if (!reminderMin || firedRef.current) return;
-    if (elapsed >= reminderMin * 60) {
-      firedRef.current = true;
-      const title = `⏱ ${categoryName}`;
-      const body = `Já passaram ${reminderMin >= 60 ? `${Math.floor(reminderMin / 60)}h${reminderMin % 60 ? ` ${reminderMin % 60}m` : ""}` : `${reminderMin}m`}${note ? ` · ${note}` : ""}`;
-      try {
-        if ("Notification" in window && Notification.permission === "granted") {
-          new Notification(title, { body, tag: `timer-${sessionId}` });
-        }
-      } catch {}
-      try {
-        // small audible cue
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const o = ctx.createOscillator();
-        const g = ctx.createGain();
-        o.connect(g); g.connect(ctx.destination);
-        o.frequency.value = 880; g.gain.value = 0.05;
-        o.start(); setTimeout(() => { o.stop(); ctx.close(); }, 350);
-      } catch {}
-    }
-  }, [elapsed, reminderMin, categoryName, note, sessionId]);
-
-  const enableNotifications = async () => {
-    if (!("Notification" in window)) {
-      alert("Este browser não suporta notificações.");
-      return;
-    }
-    if (Notification.permission === "default") {
-      await Notification.requestPermission();
-    }
+  const toggle = (m: number) => {
+    const has = value.includes(m);
+    const next = has ? value.filter((x) => x !== m) : [...value, m].sort((a, b) => a - b);
+    onChange(next);
+    if (!has) void ensureNotificationPermission();
   };
-
-  const handleSelect = (v: string) => {
-    if (v === "custom") { setCustomOpen(true); return; }
-    setReminderMin(Number(v));
-    if (Number(v) > 0) void enableNotifications();
-  };
-
-  const saveCustom = () => {
+  const addCustom = () => {
     const n = Math.max(1, Math.floor(Number(customVal) || 0));
-    if (n > 0) {
-      setReminderMin(n);
-      void enableNotifications();
+    if (n > 0 && !value.includes(n)) {
+      onChange([...value, n].sort((a, b) => a - b));
+      void ensureNotificationPermission();
     }
     setCustomOpen(false);
     setCustomVal("");
   };
-
-  const isPreset = REMINDER_PRESETS.some((p) => p.minutes === reminderMin);
-  const selectValue = reminderMin === 0 ? "0" : isPreset ? String(reminderMin) : "custom";
-
+  const all = Array.from(new Set([...REMINDER_PRESETS, ...value])).sort((a, b) => a - b);
   return (
-    <>
-      <div className="flex flex-wrap items-center gap-2">
-        <FloatingWindowButton
-          startedAt={startedAt}
-          categoryName={categoryName}
-          categoryColor={categoryColor}
-          note={note}
-          onStop={onStop}
-        />
-        <div className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-input border border-border text-xs">
-          {reminderMin > 0 ? <Bell className="h-3.5 w-3.5 text-primary" /> : <BellOff className="h-3.5 w-3.5 text-muted-foreground" />}
-          <select
-            value={selectValue}
-            onChange={(e) => handleSelect(e.target.value)}
-            className="bg-transparent outline-none text-xs"
+    <div className="mt-1 flex flex-wrap gap-1.5">
+      {all.map((m) => {
+        const active = value.includes(m);
+        return (
+          <button
+            key={m}
+            type="button"
+            onClick={() => toggle(m)}
+            className={`px-2.5 py-1 rounded-full border text-xs transition-colors ${
+              active
+                ? "bg-primary/15 border-primary/60 text-primary"
+                : "bg-input border-border text-muted-foreground hover:border-primary/40"
+            }`}
           >
-            {REMINDER_PRESETS.map((p) => (
-              <option key={p.minutes} value={String(p.minutes)}>{p.label}</option>
-            ))}
-            {!isPreset && reminderMin > 0 && (
-              <option value="custom">{reminderMin} min (custom)</option>
-            )}
-            <option value="custom">Personalizado…</option>
-          </select>
-        </div>
-      </div>
+            {active && <Bell className="inline h-3 w-3 mr-1 -mt-0.5" />}
+            {fmtMinutes(m)}
+          </button>
+        );
+      })}
+      <button
+        type="button"
+        onClick={() => setCustomOpen(true)}
+        className="px-2.5 py-1 rounded-full border border-dashed border-border text-xs text-muted-foreground hover:border-primary/40"
+      >
+        <Plus className="inline h-3 w-3 -mt-0.5" /> Personalizado
+      </button>
+      {value.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          className="px-2.5 py-1 rounded-full text-xs text-muted-foreground hover:text-destructive"
+        >
+          Limpar
+        </button>
+      )}
       {customOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setCustomOpen(false)}>
           <div className="glass-card p-5 w-full max-w-xs space-y-3" onClick={(e) => e.stopPropagation()}>
@@ -1166,18 +1122,101 @@ function ActiveTimerExtras({
               min={1}
               value={customVal}
               onChange={(e) => setCustomVal(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") saveCustom(); }}
+              onKeyDown={(e) => { if (e.key === "Enter") addCustom(); }}
               placeholder="ex: 45"
               className="w-full px-3 py-2 rounded-lg bg-input border border-border text-sm"
             />
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setCustomOpen(false)} className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs">Cancelar</button>
-              <button onClick={saveCustom} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs">Guardar</button>
+              <button onClick={addCustom} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs">Adicionar</button>
             </div>
           </div>
         </div>
       )}
-    </>
+    </div>
+  );
+}
+
+function ActiveTimerExtras({
+  sessionId,
+  startedAt,
+  elapsed,
+  categoryName,
+  categoryColor,
+  note,
+  reminders,
+  onRemindersChange,
+  onStop,
+}: {
+  sessionId: string;
+  startedAt: number;
+  elapsed: number;
+  categoryName: string;
+  categoryColor: string;
+  note: string;
+  reminders: number[];
+  onRemindersChange: (v: number[]) => void;
+  onStop: () => void;
+}) {
+  // Fire each reminder once per device. Key includes sessionId so each session is independent across devices.
+  const firedKey = `cron-fired-${sessionId}`;
+  const firedRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      firedRef.current = new Set(JSON.parse(window.localStorage.getItem(firedKey) || "[]"));
+    } catch {
+      firedRef.current = new Set();
+    }
+  }, [firedKey]);
+
+  useEffect(() => {
+    if (!reminders.length) return;
+    let changed = false;
+    for (const m of reminders) {
+      if (firedRef.current.has(m)) continue;
+      if (elapsed >= m * 60) {
+        firedRef.current.add(m);
+        changed = true;
+        const title = `⏱ ${categoryName} — ${fmtMinutes(m)}`;
+        const body = `Já passaram ${fmtMinutes(m)}${note ? ` · ${note}` : ""}`;
+        try {
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification(title, { body, tag: `timer-${sessionId}-${m}`, renotify: true } as any);
+          }
+        } catch {}
+        try {
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.frequency.value = 880; g.gain.value = 0.05;
+          o.start(); setTimeout(() => { o.stop(); ctx.close(); }, 350);
+        } catch {}
+      }
+    }
+    if (changed) {
+      try { window.localStorage.setItem(firedKey, JSON.stringify([...firedRef.current])); } catch {}
+    }
+  }, [elapsed, reminders, categoryName, note, sessionId, firedKey]);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <FloatingWindowButton
+          startedAt={startedAt}
+          categoryName={categoryName}
+          categoryColor={categoryColor}
+          note={note}
+          onStop={onStop}
+        />
+        <span className="text-[11px] text-muted-foreground inline-flex items-center gap-1">
+          {reminders.length ? <Bell className="h-3 w-3 text-primary" /> : <BellOff className="h-3 w-3" />}
+          {reminders.length ? `Lembretes: ${reminders.map(fmtMinutes).join(" · ")}` : "Sem lembretes"}
+        </span>
+      </div>
+      <RemindersPicker value={reminders} onChange={onRemindersChange} />
+    </div>
   );
 }
 
