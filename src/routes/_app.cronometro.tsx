@@ -112,19 +112,21 @@ function CronometroPage() {
     queryFn: async (): Promise<Cat[]> => {
       const { data, error } = await supabase
         .from("timer_categories")
-        .select("id,name,color")
+        .select("id,name,color,parent_id")
         .order("created_at", { ascending: true });
       if (error) throw error;
+      const mapRow = (r: { id: string; name: string; color: string; parent_id: string | null }): Cat =>
+        ({ id: r.id, name: r.name, color: r.color, parentId: r.parent_id });
       if (!data || data.length === 0) {
         const seeded = DEFAULT_CATS.map((c) => ({ ...c, user_id: user!.id }));
         const { data: inserted, error: e2 } = await supabase
           .from("timer_categories")
           .insert(seeded)
-          .select("id,name,color");
+          .select("id,name,color,parent_id");
         if (e2) throw e2;
-        return inserted ?? [];
+        return (inserted ?? []).map(mapRow);
       }
-      return data;
+      return data.map(mapRow);
     },
     refetchOnWindowFocus: true,
   });
@@ -135,7 +137,7 @@ function CronometroPage() {
     queryFn: async (): Promise<DbSession[]> => {
       const { data, error } = await supabase
         .from("timer_sessions")
-        .select("id,category_id,note,started_at,ended_at,reminders_minutes")
+        .select("id,category_id,note,started_at,ended_at,reminders_minutes,paused_at,paused_ms")
         .order("started_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
