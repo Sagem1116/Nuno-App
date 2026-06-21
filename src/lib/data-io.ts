@@ -320,7 +320,15 @@ async function importActivitySetup(userId: string, parsed: any) {
 }
 
 export function exportData(filename: string, data: unknown) {
-  downloadJson(`${filename}-${stamp()}.json`, data);
+  // Wrap arbitrary payloads in a versioned envelope. If the caller already
+  // provided one (has app + schema_version), keep it as-is.
+  const isEnvelope = data && typeof data === "object"
+    && (data as any).app === APP_NAME
+    && typeof (data as any).schema_version === "number";
+  const payload = isEnvelope
+    ? data
+    : buildEnvelope(filename, (data && typeof data === "object" ? (data as object) : { value: data }));
+  downloadJson(`${filename}-${stamp()}.json`, payload);
 }
 
 // ---------- Auto-export (weekly) ----------
