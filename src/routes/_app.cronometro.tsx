@@ -576,9 +576,19 @@ function CronometroPage() {
           <div className="flex flex-col md:flex-row md:items-center gap-6 md:gap-10">
             <div className="flex-1">
               <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-                Em curso
+                {isPaused ? "Em pausa" : "Em curso"}
               </div>
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                {activeParent && activeParent.id !== activeCat?.id && (
+                  <>
+                    <span
+                      className="h-3 w-3 rounded-full"
+                      style={{ background: activeParent.color }}
+                    />
+                    <span className="text-sm font-medium text-muted-foreground">{activeParent.name}</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  </>
+                )}
                 <span
                   className="h-3 w-3 rounded-full"
                   style={{ background: activeCat?.color ?? "#888" }}
@@ -594,17 +604,35 @@ function CronometroPage() {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
+                {activePausedMs > 0 && ` · pausado ${fmtDuration(Math.round(activePausedMs / 1000))}`}
               </p>
             </div>
-            <div className="text-5xl md:text-6xl font-mono font-bold neon-text tabular-nums">
+            <div className={`text-5xl md:text-6xl font-mono font-bold tabular-nums ${isPaused ? "text-muted-foreground" : "neon-text"}`}>
               {fmtDuration(elapsedActive)}
             </div>
             <div className="flex flex-col gap-2">
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                {isPaused ? (
+                  <button
+                    onClick={() => resumeMut.mutate()}
+                    disabled={resumeMut.isPending}
+                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-medium hover:shadow-glow-strong transition-all"
+                  >
+                    <Play className="h-4 w-4" /> Retomar
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => pauseMut.mutate()}
+                    disabled={pauseMut.isPending}
+                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-input border border-border font-medium hover:border-primary/50"
+                  >
+                    <Pause className="h-4 w-4" /> Pausar
+                  </button>
+                )}
                 <button
                   onClick={() => stopMut.mutate()}
                   disabled={stopMut.isPending}
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-medium hover:shadow-glow-strong transition-all"
+                  className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-input border border-border text-sm hover:border-primary/50"
                 >
                   <Square className="h-4 w-4" /> Parar
                 </button>
