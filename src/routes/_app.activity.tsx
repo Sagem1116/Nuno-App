@@ -176,14 +176,43 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
   const total = filtered.reduce((a, l) => a + l.duration_seconds, 0);
   const unclassified = filtered.filter(l => !l.category_id).reduce((a, l) => a + l.duration_seconds, 0);
 
+  // Rolls subcategory durations up to their parent category
   const byCat = useMemo(() => {
     const m = new Map<string, number>();
-    for (const l of filtered) m.set(l.category_id ?? "unclassified", (m.get(l.category_id ?? "unclassified") ?? 0) + l.duration_seconds);
+    for (const l of filtered) {
+      let key = "unclassified";
+      if (l.category_id) {
+        const c = cats.find(x => x.id === l.category_id);
+        key = c?.parent_id ?? l.category_id;
+      }
+      m.set(key, (m.get(key) ?? 0) + l.duration_seconds);
+    }
     return Array.from(m.entries()).map(([id, sec], i) => {
       const c = cats.find(x => x.id === id);
       return { name: c?.name ?? "Não classificado", value: sec, color: c?.color ?? COLORS[i % COLORS.length] };
     }).sort((a, b) => b.value - a.value);
   }, [filtered, cats]);
+
+  // Subcategory breakdown when a parent category is selected
+  const bySubCat = useMemo(() => {
+    if (parentCatFilter === "all" || parentCatFilter === "none") return [];
+    const subIds = new Set(cats.filter(c => c.parent_id === parentCatFilter).map(c => c.id));
+    if (subIds.size === 0) return [];
+    const m = new Map<string, number>();
+    for (const l of filtered) {
+      if (!l.category_id) continue;
+      const key = subIds.has(l.category_id)
+        ? l.category_id
+        : (l.category_id === parentCatFilter ? parentCatFilter : null);
+      if (!key) continue;
+      m.set(key, (m.get(key) ?? 0) + l.duration_seconds);
+    }
+    return Array.from(m.entries()).map(([id, sec], i) => {
+      const c = cats.find(x => x.id === id);
+      const name = id === parentCatFilter ? `${c?.name ?? ""} (direto)` : (c?.name ?? "—");
+      return { name, value: sec, color: c?.color ?? COLORS[i % COLORS.length] };
+    }).sort((a, b) => b.value - a.value);
+  }, [filtered, cats, parentCatFilter]);
 
   const byProj = useMemo(() => {
     const m = new Map<string, number>();
@@ -320,6 +349,22 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             </ResponsiveContainer>
           </CardContent>
         </Card>
+        {bySubCat.length > 0 && (
+          <Card className="lg:col-span-2">
+            <CardHeader><CardTitle className="text-base">Horas por subcategoria</CardTitle></CardHeader>
+            <CardContent style={{ height: 280 }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie data={bySubCat} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
+                    {bySubCat.map((d, i) => <Cell key={i} fill={d.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(value: number) => fmtDuration(value)} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
