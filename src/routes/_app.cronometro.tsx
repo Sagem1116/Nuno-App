@@ -1217,10 +1217,23 @@ function SessionEditor({
   onClose: () => void;
   onSave: (s: Session) => void;
 }) {
-  const [categoryId, setCategoryId] = useState(session.categoryId);
+  const parents = useMemo(() => cats.filter((c) => !c.parentId), [cats]);
+  const initialParentId = useMemo(() => {
+    const cur = cats.find((c) => c.id === session.categoryId);
+    return cur?.parentId ?? cur?.id ?? parents[0]?.id ?? "";
+  }, [cats, session.categoryId, parents]);
+  const initialSubId = useMemo(() => {
+    const cur = cats.find((c) => c.id === session.categoryId);
+    return cur?.parentId ? cur.id : "";
+  }, [cats, session.categoryId]);
+
+  const [parentId, setParentId] = useState(initialParentId);
+  const [subId, setSubId] = useState(initialSubId);
   const [note, setNote] = useState(session.note);
   const [startStr, setStartStr] = useState(toLocalInput(session.startedAt));
   const [endStr, setEndStr] = useState(toLocalInput(session.endedAt));
+
+  const subs = useMemo(() => cats.filter((c) => c.parentId === parentId), [cats, parentId]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -1230,7 +1243,8 @@ function SessionEditor({
       alert("Hora de fim tem de ser depois do início.");
       return;
     }
-    const cat = cats.find((c) => c.id === categoryId) ?? cats[0];
+    const effectiveId = subId || parentId;
+    const cat = cats.find((c) => c.id === effectiveId) ?? cats[0];
     onSave({
       ...session,
       categoryId: cat?.id ?? session.categoryId,
@@ -1265,11 +1279,29 @@ function SessionEditor({
               Categoria
             </label>
             <select
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
+              value={parentId}
+              onChange={(e) => { setParentId(e.target.value); setSubId(""); }}
               className="mt-1 w-full px-3 py-2 rounded-lg bg-input border border-border text-sm"
             >
-              {cats.map((c) => (
+              {parents.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] uppercase tracking-widest text-muted-foreground">
+              Subcategoria
+            </label>
+            <select
+              value={subId}
+              onChange={(e) => setSubId(e.target.value)}
+              disabled={subs.length === 0}
+              className="mt-1 w-full px-3 py-2 rounded-lg bg-input border border-border text-sm disabled:opacity-50"
+            >
+              <option value="">{subs.length === 0 ? "(sem subcategorias)" : "(nenhuma)"}</option>
+              {subs.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
