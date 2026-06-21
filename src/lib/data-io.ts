@@ -244,6 +244,7 @@ async function exportActivitySetup(opts?: { silent?: boolean }) {
 }
 
 async function importActivitySetup(userId: string, parsed: any) {
+  if (!validateEnvelope(parsed, "activity_setup")) return;
   const categories = Array.isArray(parsed?.categories) ? parsed.categories : [];
   const projects = Array.isArray(parsed?.projects) ? parsed.projects : [];
   const rules = Array.isArray(parsed?.rules) ? parsed.rules : [];
