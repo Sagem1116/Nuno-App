@@ -525,10 +525,9 @@ function CronometroPage() {
                 supabase.from("timer_sessions").select("*"),
               ]);
               const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-              downloadJson(`cronometro-${stamp}.json`, {
-                version: 1, exported_at: new Date().toISOString(),
+              downloadJson(`cronometro-${stamp}.json`, buildEnvelope("cronometro_full", {
                 categories: cs ?? [], sessions: ss ?? [],
-              });
+              }));
               toast.success(`${(ss ?? []).length} sessão(ões) exportada(s)`);
             }}
             className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg bg-input border border-border text-xs hover:border-primary/50"
