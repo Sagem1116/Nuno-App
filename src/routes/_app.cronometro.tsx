@@ -50,7 +50,7 @@ interface Session {
   durationSeconds: number;
 }
 
-const DEFAULT_CATS: Array<Omit<Cat, "id">> = [
+const DEFAULT_CATS: Array<{ name: string; color: string }> = [
   { name: "Trabalho", color: "#ff7a18" },
   { name: "Estudo", color: "#60a5fa" },
   { name: "Exercício", color: "#34d399" },
