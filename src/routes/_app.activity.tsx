@@ -151,7 +151,7 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     for (const l of filtered) if (l.project_id) m.set(l.project_id, (m.get(l.project_id) ?? 0) + l.duration_seconds);
     return Array.from(m.entries()).map(([id, sec], i) => {
       const p = projs.find(x => x.id === id);
-      return { name: p?.name ?? "—", value: +(sec / 3600).toFixed(2), color: p?.color ?? COLORS[i % COLORS.length] };
+      return { name: p?.name ?? "—", value: sec, color: p?.color ?? COLORS[i % COLORS.length] };
     }).sort((a, b) => b.value - a.value);
   }, [filtered, projs]);
 
