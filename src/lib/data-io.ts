@@ -33,13 +33,15 @@ export function pickJsonFile(): Promise<unknown | null> {
 
 const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 
-export type Table = "notes" | "links" | "transactions" | "tasks";
+export type Table = "notes" | "links" | "transactions" | "tasks" | "timer_categories" | "timer_sessions";
 
 const ALLOWED_FIELDS: Record<Table, string[]> = {
   notes: ["title", "content", "tags"],
   links: ["title", "url", "description", "tags"],
   transactions: ["amount", "type", "category", "description", "occurred_at"],
   tasks: ["title", "description", "priority", "due_date", "status"],
+  timer_categories: ["name", "color"],
+  timer_sessions: ["category_id", "note", "started_at", "ended_at", "reminders_minutes"],
 };
 
 export async function exportTable(table: Table, opts?: { silent?: boolean }) {

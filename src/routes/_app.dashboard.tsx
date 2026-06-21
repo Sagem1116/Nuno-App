@@ -761,6 +761,8 @@ const BACKUP_TABLES: { table: DataTable; label: string }[] = [
   { table: "links", label: "Links" },
   { table: "tasks", label: "Tarefas" },
   { table: "transactions", label: "Transações" },
+  { table: "timer_categories", label: "Categorias do cronómetro" },
+  { table: "timer_sessions", label: "Sessões do cronómetro" },
 ];
 
 function BackupsPanel({ userId }: { userId: string | undefined }) {
