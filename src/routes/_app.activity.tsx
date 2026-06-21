@@ -142,7 +142,7 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     for (const l of filtered) m.set(l.category_id ?? "unclassified", (m.get(l.category_id ?? "unclassified") ?? 0) + l.duration_seconds);
     return Array.from(m.entries()).map(([id, sec], i) => {
       const c = cats.find(x => x.id === id);
-      return { name: c?.name ?? "Não classificado", value: +(sec / 3600).toFixed(2), color: c?.color ?? COLORS[i % COLORS.length] };
+      return { name: c?.name ?? "Não classificado", value: sec, color: c?.color ?? COLORS[i % COLORS.length] };
     }).sort((a, b) => b.value - a.value);
   }, [filtered, cats]);
 
