@@ -15,6 +15,15 @@ import { useAuth } from "@/lib/auth";
 import { useNativeTimerMirror } from "@/lib/native-timer-mirror";
 import { downloadJson, pickJsonFile } from "@/lib/data-io";
 import { toast } from "sonner";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
 
 export const Route = createFileRoute("/_app/cronometro")({
   component: CronometroPage,
@@ -988,57 +997,86 @@ function CronometroPage() {
             Sem sessões registadas neste período.
           </p>
         ) : (
-          <div className="space-y-1.5">
-            {inPeriod.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg bg-input/40 border border-border/60 hover:border-primary/40 transition-colors"
-              >
-                <span
-                  className="h-2.5 w-2.5 rounded-full shrink-0"
-                  style={{ background: s.categoryColor }}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm truncate">
-                    <span className="font-medium">{s.categoryName}</span>
-                    {s.note && <span className="text-muted-foreground"> · {s.note}</span>}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {new Date(s.startedAt).toLocaleString("pt-PT", {
-                      day: "2-digit",
-                      month: "short",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                    {" → "}
-                    {new Date(s.endedAt).toLocaleTimeString("pt-PT", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                </div>
-                <div className="text-sm font-mono tabular-nums">
-                  {fmtDuration(s.durationSeconds)}
-                </div>
-                <button
-                  onClick={() => setEditingSession(s)}
-                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/40"
-                  aria-label="Editar"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => removeSession(s.id)}
-                  className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                  aria-label="Eliminar"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
+          <div className="relative w-full overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Categoria</TableHead>
+                  <TableHead>Subcategoria</TableHead>
+                  <TableHead>Início</TableHead>
+                  <TableHead>Fim</TableHead>
+                  <TableHead className="text-right">Duração</TableHead>
+                  <TableHead className="w-20 text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {inPeriod.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full shrink-0"
+                          style={{ background: s.parentColor }}
+                        />
+                        <span className="font-medium truncate">{s.parentName}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {s.parentId && s.parentId !== s.categoryId ? (
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full shrink-0"
+                            style={{ background: s.categoryColor }}
+                          />
+                          <span className="truncate">{s.categoryName}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground whitespace-nowrap">
+                      {new Date(s.startedAt).toLocaleString("pt-PT", {
+                        day: "2-digit",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground whitespace-nowrap">
+                      {new Date(s.endedAt).toLocaleTimeString("pt-PT", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums whitespace-nowrap">
+                      {fmtDuration(s.durationSeconds)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setEditingSession(s)}
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/40"
+                          aria-label="Editar"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => removeSession(s.id)}
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          aria-label="Eliminar"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         )}
       </section>
+
 
       {catManagerOpen && (
         <CategoryManager
@@ -1295,12 +1333,16 @@ function SessionEditor({
       return;
     }
     const effectiveId = subId || parentId;
-    const cat = cats.find((c) => c.id === effectiveId) ?? cats[0];
+    const cat = cats.find((c) => c.id === effectiveId);
+    const parentCat = cat?.parentId ? cats.find((c) => c.id === cat.parentId) : cat;
     onSave({
       ...session,
       categoryId: cat?.id ?? session.categoryId,
       categoryName: cat?.name ?? session.categoryName,
       categoryColor: cat?.color ?? session.categoryColor,
+      parentId: parentCat?.id ?? null,
+      parentName: parentCat?.name ?? cat?.name ?? session.parentName,
+      parentColor: parentCat?.color ?? cat?.color ?? session.parentColor,
       note: note.trim(),
       startedAt,
       endedAt,
