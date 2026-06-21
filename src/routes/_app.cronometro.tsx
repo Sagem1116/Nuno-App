@@ -601,18 +601,19 @@ function CronometroPage() {
           ) : (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={buckets}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} />
+                <YAxis stroke="var(--muted-foreground)" fontSize={11} />
                 <Tooltip
                   contentStyle={{
-                    background: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
+                    background: "var(--popover)",
+                    border: "1px solid var(--border)",
                     borderRadius: 8,
+                    color: "var(--popover-foreground)",
                   }}
                   formatter={(v: number) => `${v.toFixed(2)}h`}
                 />
-                <Bar dataKey="hours" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="hours" fill="var(--primary)" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -635,7 +636,7 @@ function CronometroPage() {
                     innerRadius={55}
                     outerRadius={90}
                     paddingAngle={2}
-                    stroke="hsl(var(--background))"
+                    stroke="var(--background)"
                   >
                     {byCategory.map((c, i) => (
                       <Cell key={i} fill={c.color} />
@@ -643,9 +644,10 @@ function CronometroPage() {
                   </Pie>
                   <Tooltip
                     contentStyle={{
-                      background: "hsl(var(--popover))",
-                      border: "1px solid hsl(var(--border))",
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
                       borderRadius: 8,
+                      color: "var(--popover-foreground)",
                     }}
                     formatter={(v: number) => fmtHoursShort(v)}
                   />
