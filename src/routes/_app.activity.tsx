@@ -92,6 +92,7 @@ function ActivityPage() {
         <TabsList>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="unclassified">Não classificados</TabsTrigger>
+          <TabsTrigger value="last-import">Último import</TabsTrigger>
           <TabsTrigger value="rules">Regras</TabsTrigger>
           <TabsTrigger value="meta">Categorias & Projetos</TabsTrigger>
           <TabsTrigger value="import">Importar</TabsTrigger>
@@ -102,6 +103,9 @@ function ActivityPage() {
         </TabsContent>
         <TabsContent value="unclassified" className="mt-4">
           <UnclassifiedTab uid={uid!} logs={(logs.data ?? []).filter(l => !l.category_id)} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_logs"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
+        </TabsContent>
+        <TabsContent value="last-import" className="mt-4">
+          <LastImportUnclassifiedTab uid={uid!} allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_logs"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
         </TabsContent>
         <TabsContent value="rules" className="mt-4">
           <RulesTab uid={uid!} rules={rules.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => qc.invalidateQueries({ queryKey: ["activity_rules"] })} />
