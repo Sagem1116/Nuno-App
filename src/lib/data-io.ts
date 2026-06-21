@@ -113,6 +113,9 @@ export type Table =
   | "timer_sessions"
   | "activity_setup";
 
+export type ImportTable = Table | "activity_logs";
+
+
 const ALLOWED_FIELDS: Record<Table, string[]> = {
   notes: ["title", "content", "tags", "is_favorite"],
   links: ["title", "url", "description", "tags", "is_favorite"],
