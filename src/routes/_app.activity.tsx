@@ -528,19 +528,51 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
     onChanged();
   }
   async function reapplyAll() {
-    const { data: allLogs, error: le } = await supabase.from("activity_logs").select("id, app_name, window_title");
-    if (le) { toast.error(le.message); return; }
-    const { data: allRules, error: re } = await supabase.from("activity_rules").select("*").order("priority", { ascending: false });
-    if (re) { toast.error(re.message); return; }
-    let n = 0;
-    for (const l of allLogs ?? []) {
-      const m = matchRule(l.app_name, l.window_title, (allRules ?? []) as Rule[]);
-      if (m) {
-        await supabase.from("activity_logs").update({ category_id: m.category_id, project_id: m.project_id }).eq("id", l.id);
-        n++;
+    try {
+      // paginate logs (Supabase default cap is 1000 per request)
+      const PAGE = 1000;
+      const all: { id: string; app_name: string; window_title: string }[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from("activity_logs")
+          .select("id, app_name, window_title")
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        all.push(...(data ?? []));
+        if (!data || data.length < PAGE) break;
       }
+      const { data: allRules, error: re } = await supabase
+        .from("activity_rules").select("*").order("priority", { ascending: false });
+      if (re) throw re;
+
+      // group ids by (category_id|project_id) and bulk update
+      const buckets = new Map<string, { cat: string; proj: string | null; ids: string[] }>();
+      for (const l of all) {
+        const m = matchRule(l.app_name, l.window_title, (allRules ?? []) as Rule[]);
+        if (!m || !m.category_id) continue;
+        const key = `${m.category_id}|${m.project_id ?? ""}`;
+        const b = buckets.get(key) ?? { cat: m.category_id, proj: m.project_id, ids: [] };
+        b.ids.push(l.id);
+        buckets.set(key, b);
+      }
+      let n = 0;
+      for (const b of buckets.values()) {
+        // chunk .in() to avoid URL-length limits
+        for (let i = 0; i < b.ids.length; i += 500) {
+          const slice = b.ids.slice(i, i + 500);
+          const { error } = await supabase
+            .from("activity_logs")
+            .update({ category_id: b.cat, project_id: b.proj })
+            .in("id", slice);
+          if (error) throw error;
+          n += slice.length;
+        }
+      }
+      toast.success(`Re-aplicado em ${n} registo(s)`);
+      onChanged();
+    } catch (e: any) {
+      toast.error(e.message ?? "Erro ao re-aplicar regras");
     }
-    toast.success(`Re-aplicado em ${n} registo(s)`); onChanged();
   }
 
   return (
