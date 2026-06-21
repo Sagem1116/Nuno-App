@@ -315,7 +315,7 @@ function Dashboard() {
         <Kpi
           to="/tarefas"
           icon={CheckSquare}
-          label="Tarefas hoje"
+          label={periodFilter === "last_day" ? "Tarefas ontem" : "Tarefas hoje"}
           value={taskStats.todayTasks.length}
           sub={taskStats.overdue.length > 0 ? `${taskStats.overdue.length} atrasada(s)` : `${taskStats.pending.length} pendentes`}
           danger={taskStats.overdue.length > 0}
@@ -323,7 +323,7 @@ function Dashboard() {
         <Kpi
           to="/financas"
           icon={Wallet}
-          label={`Saldo · ${format(today, "MMM", { locale: pt })}`}
+          label={`Saldo · ${periodFilter === "all" ? format(today, "MMM", { locale: pt }) : periodFilter === "today" ? "Hoje" : "Ontem"}`}
           value={fmtEur(monthStats.balance)}
           sub={`${fmtEur(monthStats.income)} · -${fmtEur(monthStats.expense)}`}
           tone={monthStats.balance >= 0 ? "good" : "bad"}
@@ -331,7 +331,7 @@ function Dashboard() {
         <Kpi
           to="/viagens"
           icon={Plane}
-          label="Próxima viagem"
+          label={periodFilter === "all" ? "Próxima viagem" : periodFilter === "today" ? "Viagem hoje" : "Viagem ontem"}
           value={tripStats.upcoming[0]?.destination ?? tripStats.active?.destination ?? "—"}
           sub={daysUntil(tripStats.upcoming[0]?.start_date, today) !== null
             ? `em ${daysUntil(tripStats.upcoming[0]?.start_date, today)} dias`
@@ -340,9 +340,9 @@ function Dashboard() {
         <Kpi
           to="/reservas"
           icon={Ticket}
-          label="Reservas"
-          value={reservations.filter((r) => r.status !== "cancelled").length}
-          sub={`${reservations.filter((r) => r.status === "confirmed").length} confirmadas`}
+          label={periodFilter === "all" ? "Reservas" : periodFilter === "today" ? "Reservas hoje" : "Reservas ontem"}
+          value={visibleReservations.filter((r) => r.status !== "cancelled").length}
+          sub={`${visibleReservations.filter((r) => r.status === "confirmed").length} confirmadas`}
         />
       </div>
 
