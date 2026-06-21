@@ -33,7 +33,14 @@ export function pickJsonFile(): Promise<unknown | null> {
 
 const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 
-export type Table = "notes" | "links" | "transactions" | "tasks" | "timer_categories" | "timer_sessions";
+export type Table =
+  | "notes"
+  | "links"
+  | "transactions"
+  | "tasks"
+  | "timer_categories"
+  | "timer_sessions"
+  | "activity_setup";
 
 const ALLOWED_FIELDS: Record<Table, string[]> = {
   notes: ["title", "content", "tags", "is_favorite"],
@@ -42,9 +49,11 @@ const ALLOWED_FIELDS: Record<Table, string[]> = {
   tasks: ["title", "description", "priority", "due_date", "status"],
   timer_categories: ["name", "color", "parent_id"],
   timer_sessions: ["category_id", "note", "started_at", "ended_at", "reminders_minutes", "paused_at", "paused_ms"],
+  activity_setup: [],
 };
 
 export async function exportTable(table: Table, opts?: { silent?: boolean }) {
+  if (table === "activity_setup") return exportActivitySetup(opts);
   const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: false });
   if (error) { if (!opts?.silent) toast.error(error.message); return null; }
   const filename = `${table}-${stamp()}.json`;
@@ -57,12 +66,22 @@ export async function exportTable(table: Table, opts?: { silent?: boolean }) {
 export async function importTable(table: Table, userId: string) {
   const parsed = await pickJsonFile();
   if (!parsed) return;
+  if (table === "activity_setup") {
+    await importActivitySetup(userId, parsed);
+    return;
+  }
   const items: any[] = Array.isArray(parsed)
     ? parsed
     : Array.isArray((parsed as any)?.items)
       ? (parsed as any).items
       : [];
   if (!items.length) { toast.error("Sem itens para importar"); return; }
+  if (table === "timer_categories") {
+    const result = await importHierarchicalCategories("timer_categories", items, userId);
+    toast.success(`${result.inserted} categoria(s) importadas${result.reused ? ` · ${result.reused} já existiam` : ""}`);
+    if (result.skipped) toast.warning(`${result.skipped} subcategoria(s) ignoradas por falta da categoria-mãe`);
+    return;
+  }
   const allowed = ALLOWED_FIELDS[table];
   const rows = items.map((it) => {
     const row: Record<string, unknown> = { user_id: userId };
