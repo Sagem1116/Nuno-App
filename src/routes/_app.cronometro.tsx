@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Play, Square, Plus, Pencil, Trash2, X, Timer, Tags as TagsIcon,
+  Play, Square, Plus, Pencil, Trash2, X, Timer, Tags as TagsIcon, Loader2,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell,
 } from "recharts";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_app/cronometro")({
   component: CronometroPage,
@@ -17,54 +20,31 @@ interface Cat {
   name: string;
   color: string;
 }
+interface DbSession {
+  id: string;
+  category_id: string | null;
+  note: string | null;
+  started_at: string;
+  ended_at: string | null;
+}
 interface Session {
   id: string;
   categoryId: string;
   categoryName: string;
   categoryColor: string;
   note: string;
-  startedAt: number;   // ms epoch
-  endedAt: number;     // ms epoch
+  startedAt: number;
+  endedAt: number;
   durationSeconds: number;
 }
-interface Active {
-  categoryId: string;
-  categoryName: string;
-  categoryColor: string;
-  note: string;
-  startedAt: number;
-}
 
-const CATS_KEY = "cronometro:categories";
-const SESSIONS_KEY = "cronometro:sessions";
-const ACTIVE_KEY = "cronometro:active";
-
-const DEFAULT_CATS: Cat[] = [
-  { id: "c-trabalho", name: "Trabalho", color: "#ff7a18" },
-  { id: "c-estudo", name: "Estudo", color: "#60a5fa" },
-  { id: "c-exercicio", name: "Exercício", color: "#34d399" },
-  { id: "c-lazer", name: "Lazer", color: "#f472b6" },
-  { id: "c-projeto", name: "Projeto pessoal", color: "#a78bfa" },
+const DEFAULT_CATS: Array<Omit<Cat, "id">> = [
+  { name: "Trabalho", color: "#ff7a18" },
+  { name: "Estudo", color: "#60a5fa" },
+  { name: "Exercício", color: "#34d399" },
+  { name: "Lazer", color: "#f472b6" },
+  { name: "Projeto pessoal", color: "#a78bfa" },
 ];
-
-const uid = () =>
-  (typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
-
-function loadJSON<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-function saveJSON(key: string, value: unknown) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(key, JSON.stringify(value));
-}
 
 function fmtDuration(seconds: number) {
   const s = Math.max(0, Math.floor(seconds));
@@ -95,7 +75,7 @@ function periodStart(p: Period, ref = new Date()) {
   d.setHours(0, 0, 0, 0);
   if (p === "day") return d.getTime();
   if (p === "week") {
-    const dow = (d.getDay() + 6) % 7; // segunda = 0
+    const dow = (d.getDay() + 6) % 7;
     d.setDate(d.getDate() - dow);
     return d.getTime();
   }
@@ -111,16 +91,96 @@ function periodEnd(p: Period, ref = new Date()) {
 }
 
 function CronometroPage() {
-  const [cats, setCats] = useState<Cat[]>(() => {
-    const c = loadJSON<Cat[]>(CATS_KEY, []);
-    if (c.length === 0) {
-      saveJSON(CATS_KEY, DEFAULT_CATS);
-      return DEFAULT_CATS;
-    }
-    return c;
+  const { user, loading: authLoading } = useAuth();
+  const qc = useQueryClient();
+
+  const catsQuery = useQuery({
+    queryKey: ["timer-categories", user?.id],
+    enabled: !!user,
+    queryFn: async (): Promise<Cat[]> => {
+      const { data, error } = await supabase
+        .from("timer_categories")
+        .select("id,name,color")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        const seeded = DEFAULT_CATS.map((c) => ({ ...c, user_id: user!.id }));
+        const { data: inserted, error: e2 } = await supabase
+          .from("timer_categories")
+          .insert(seeded)
+          .select("id,name,color");
+        if (e2) throw e2;
+        return inserted ?? [];
+      }
+      return data;
+    },
+    refetchOnWindowFocus: true,
   });
-  const [sessions, setSessions] = useState<Session[]>(() => loadJSON<Session[]>(SESSIONS_KEY, []));
-  const [active, setActive] = useState<Active | null>(() => loadJSON<Active | null>(ACTIVE_KEY, null));
+
+  const sessionsQuery = useQuery({
+    queryKey: ["timer-sessions", user?.id],
+    enabled: !!user,
+    queryFn: async (): Promise<DbSession[]> => {
+      const { data, error } = await supabase
+        .from("timer_sessions")
+        .select("id,category_id,note,started_at,ended_at")
+        .order("started_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
+  });
+
+  // Realtime sync across devices
+  useEffect(() => {
+    if (!user) return;
+    const ch = supabase
+      .channel("timer-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "timer_sessions" }, () => {
+        qc.invalidateQueries({ queryKey: ["timer-sessions", user.id] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "timer_categories" }, () => {
+        qc.invalidateQueries({ queryKey: ["timer-categories", user.id] });
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(ch);
+    };
+  }, [user, qc]);
+
+  const cats = catsQuery.data ?? [];
+  const rawSessions = sessionsQuery.data ?? [];
+
+  const catById = useMemo(() => {
+    const m = new Map<string, Cat>();
+    cats.forEach((c) => m.set(c.id, c));
+    return m;
+  }, [cats]);
+
+  const activeDb = rawSessions.find((s) => !s.ended_at) ?? null;
+  const completedSessions: Session[] = useMemo(
+    () =>
+      rawSessions
+        .filter((s) => s.ended_at)
+        .map((s) => {
+          const cat = s.category_id ? catById.get(s.category_id) : undefined;
+          const startedAt = Date.parse(s.started_at);
+          const endedAt = Date.parse(s.ended_at!);
+          return {
+            id: s.id,
+            categoryId: s.category_id ?? "",
+            categoryName: cat?.name ?? "—",
+            categoryColor: cat?.color ?? "#888",
+            note: s.note ?? "",
+            startedAt,
+            endedAt,
+            durationSeconds: Math.max(1, Math.round((endedAt - startedAt) / 1000)),
+          };
+        }),
+    [rawSessions, catById],
+  );
+
   const [tickNow, setTickNow] = useState(Date.now());
   const [pickerCatId, setPickerCatId] = useState<string>("");
   const [pickerNote, setPickerNote] = useState("");
@@ -129,73 +189,94 @@ function CronometroPage() {
   const [period, setPeriod] = useState<Period>("week");
   const [refDate, setRefDate] = useState<Date>(new Date());
 
-  // persist on change
-  useEffect(() => saveJSON(CATS_KEY, cats), [cats]);
-  useEffect(() => saveJSON(SESSIONS_KEY, sessions), [sessions]);
-  useEffect(() => saveJSON(ACTIVE_KEY, active), [active]);
-
-  // tick every second while a timer is running
   useEffect(() => {
-    if (!active) return;
+    if (!activeDb) return;
     const t = setInterval(() => setTickNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [active]);
+  }, [activeDb]);
 
-  // sync default picker category
   useEffect(() => {
     if (!pickerCatId && cats[0]) setPickerCatId(cats[0].id);
   }, [cats, pickerCatId]);
 
-  const start = () => {
-    if (active) return;
-    const cat = cats.find((c) => c.id === pickerCatId);
-    if (!cat) {
-      alert("Escolhe uma categoria primeiro.");
-      return;
-    }
-    setActive({
-      categoryId: cat.id,
-      categoryName: cat.name,
-      categoryColor: cat.color,
-      note: pickerNote.trim(),
-      startedAt: Date.now(),
-    });
-    setPickerNote("");
-  };
+  const startMut = useMutation({
+    mutationFn: async () => {
+      const cat = cats.find((c) => c.id === pickerCatId);
+      if (!cat) throw new Error("Escolhe uma categoria.");
+      const { error } = await supabase.from("timer_sessions").insert({
+        user_id: user!.id,
+        category_id: cat.id,
+        note: pickerNote.trim() || null,
+        started_at: new Date().toISOString(),
+        ended_at: null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setPickerNote("");
+      qc.invalidateQueries({ queryKey: ["timer-sessions", user?.id] });
+    },
+    onError: (e: Error) => alert(e.message),
+  });
 
-  const stop = () => {
-    if (!active) return;
-    const endedAt = Date.now();
-    const duration = Math.max(1, Math.round((endedAt - active.startedAt) / 1000));
-    const sess: Session = {
-      id: uid(),
-      categoryId: active.categoryId,
-      categoryName: active.categoryName,
-      categoryColor: active.categoryColor,
-      note: active.note,
-      startedAt: active.startedAt,
-      endedAt,
-      durationSeconds: duration,
-    };
-    setSessions((prev) => [sess, ...prev]);
-    setActive(null);
-  };
+  const stopMut = useMutation({
+    mutationFn: async () => {
+      if (!activeDb) return;
+      const { error } = await supabase
+        .from("timer_sessions")
+        .update({ ended_at: new Date().toISOString() })
+        .eq("id", activeDb.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["timer-sessions", user?.id] }),
+  });
+
+  const cancelMut = useMutation({
+    mutationFn: async () => {
+      if (!activeDb) return;
+      const { error } = await supabase.from("timer_sessions").delete().eq("id", activeDb.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["timer-sessions", user?.id] }),
+  });
+
+  const deleteSessionMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("timer_sessions").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["timer-sessions", user?.id] }),
+  });
+
+  const updateSessionMut = useMutation({
+    mutationFn: async (s: Session) => {
+      const { error } = await supabase
+        .from("timer_sessions")
+        .update({
+          category_id: s.categoryId || null,
+          note: s.note || null,
+          started_at: new Date(s.startedAt).toISOString(),
+          ended_at: new Date(s.endedAt).toISOString(),
+        })
+        .eq("id", s.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["timer-sessions", user?.id] }),
+  });
 
   const cancelActive = () => {
-    if (!active) return;
+    if (!activeDb) return;
     if (!confirm("Descartar sessão em curso?")) return;
-    setActive(null);
+    cancelMut.mutate();
   };
-
   const removeSession = (id: string) => {
     if (!confirm("Eliminar sessão?")) return;
-    setSessions((prev) => prev.filter((s) => s.id !== id));
+    deleteSessionMut.mutate(id);
   };
 
-  // ---- Reports
   const pStart = periodStart(period, refDate);
   const pEnd = periodEnd(period, refDate);
-  const inPeriod = sessions.filter((s) => s.startedAt >= pStart && s.startedAt < pEnd);
+  const inPeriod = completedSessions.filter((s) => s.startedAt >= pStart && s.startedAt < pEnd);
   const totalSec = inPeriod.reduce((acc, s) => acc + s.durationSeconds, 0);
 
   const byCategory = useMemo(() => {
@@ -213,9 +294,7 @@ function CronometroPage() {
   }, [inPeriod]);
 
   const buckets = useMemo(() => {
-    // bar chart buckets based on period
     if (period === "day") {
-      // 24 hourly buckets
       const arr = Array.from({ length: 24 }, (_, h) => ({ label: `${h}h`, hours: 0 }));
       for (const s of inPeriod) {
         const hour = new Date(s.startedAt).getHours();
@@ -268,7 +347,24 @@ function CronometroPage() {
     setRefDate(d);
   };
 
-  const elapsedActive = active ? Math.floor((tickNow - active.startedAt) / 1000) : 0;
+  const activeStartedAt = activeDb ? Date.parse(activeDb.started_at) : 0;
+  const activeCat = activeDb?.category_id ? catById.get(activeDb.category_id) : undefined;
+  const elapsedActive = activeDb ? Math.floor((tickNow - activeStartedAt) / 1000) : 0;
+
+  if (authLoading || (!user && !authLoading)) {
+    return (
+      <div className="grid min-h-64 place-items-center text-sm text-muted-foreground">
+        {authLoading ? "A carregar…" : "Inicia sessão para usar o cronómetro."}
+      </div>
+    );
+  }
+  if (catsQuery.isLoading || sessionsQuery.isLoading) {
+    return (
+      <div className="grid min-h-64 place-items-center">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="page-enter space-y-6">
@@ -278,7 +374,7 @@ function CronometroPage() {
             <Timer className="h-6 w-6" /> Cronómetro
           </h1>
           <p className="text-sm text-muted-foreground">
-            Mede onde gastas o teu tempo e vê relatórios por dia, semana ou mês.
+            Sincronizado entre os teus dispositivos · relatórios diários, semanais e mensais.
           </p>
         </div>
         <button
@@ -289,9 +385,8 @@ function CronometroPage() {
         </button>
       </div>
 
-      {/* Timer card */}
       <section className="glass-card p-6 md:p-8">
-        {active ? (
+        {activeDb ? (
           <div className="flex flex-col md:flex-row md:items-center gap-6 md:gap-10">
             <div className="flex-1">
               <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
@@ -300,16 +395,16 @@ function CronometroPage() {
               <div className="flex items-center gap-3 mb-2">
                 <span
                   className="h-3 w-3 rounded-full"
-                  style={{ background: active.categoryColor }}
+                  style={{ background: activeCat?.color ?? "#888" }}
                 />
-                <span className="text-lg font-semibold">{active.categoryName}</span>
+                <span className="text-lg font-semibold">{activeCat?.name ?? "—"}</span>
               </div>
-              {active.note && (
-                <p className="text-sm text-muted-foreground">{active.note}</p>
+              {activeDb.note && (
+                <p className="text-sm text-muted-foreground">{activeDb.note}</p>
               )}
               <p className="text-xs text-muted-foreground mt-1">
                 Iniciado às{" "}
-                {new Date(active.startedAt).toLocaleTimeString("pt-PT", {
+                {new Date(activeStartedAt).toLocaleTimeString("pt-PT", {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
@@ -320,7 +415,8 @@ function CronometroPage() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={stop}
+                onClick={() => stopMut.mutate()}
+                disabled={stopMut.isPending}
                 className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-medium hover:shadow-glow-strong transition-all"
               >
                 <Square className="h-4 w-4" /> Parar
@@ -363,14 +459,14 @@ function CronometroPage() {
                   placeholder="A trabalhar em..."
                   className="mt-1 w-full px-3 py-2.5 rounded-lg bg-input border border-border text-sm"
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") start();
+                    if (e.key === "Enter") startMut.mutate();
                   }}
                 />
               </div>
             </div>
             <button
-              onClick={start}
-              disabled={cats.length === 0}
+              onClick={() => startMut.mutate()}
+              disabled={cats.length === 0 || startMut.isPending}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-medium hover:shadow-glow-strong transition-all disabled:opacity-50"
             >
               <Play className="h-4 w-4" /> Iniciar
@@ -379,7 +475,6 @@ function CronometroPage() {
         )}
       </section>
 
-      {/* Reports header */}
       <section className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex gap-1 rounded-xl border border-border bg-card/60 p-1">
           {(["day", "week", "month"] as const).map((p) => (
@@ -421,7 +516,6 @@ function CronometroPage() {
         </div>
       </section>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="glass-card p-5">
           <div className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -430,9 +524,7 @@ function CronometroPage() {
           <div className="text-2xl font-bold neon-text mt-1">{fmtDuration(totalSec)}</div>
         </div>
         <div className="glass-card p-5">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">
-            Sessões
-          </div>
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">Sessões</div>
           <div className="text-2xl font-bold mt-1">{inPeriod.length}</div>
         </div>
         <div className="glass-card p-5">
@@ -450,7 +542,6 @@ function CronometroPage() {
         </div>
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="glass-card p-5">
           <h3 className="text-sm uppercase tracking-wider text-muted-foreground mb-4">
@@ -533,7 +624,6 @@ function CronometroPage() {
         </div>
       </div>
 
-      {/* Sessions table */}
       <section className="glass-card p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm uppercase tracking-wider text-muted-foreground">
@@ -558,9 +648,7 @@ function CronometroPage() {
                 <div className="min-w-0 flex-1">
                   <div className="text-sm truncate">
                     <span className="font-medium">{s.categoryName}</span>
-                    {s.note && (
-                      <span className="text-muted-foreground"> · {s.note}</span>
-                    )}
+                    {s.note && <span className="text-muted-foreground"> · {s.note}</span>}
                   </div>
                   <div className="text-[11px] text-muted-foreground">
                     {new Date(s.startedAt).toLocaleString("pt-PT", {
@@ -602,9 +690,10 @@ function CronometroPage() {
       {catManagerOpen && (
         <CategoryManager
           cats={cats}
-          setCats={setCats}
-          sessions={sessions}
+          userId={user!.id}
+          sessions={completedSessions}
           onClose={() => setCatManagerOpen(false)}
+          onChanged={() => qc.invalidateQueries({ queryKey: ["timer-categories", user!.id] })}
         />
       )}
 
@@ -614,7 +703,7 @@ function CronometroPage() {
           cats={cats}
           onClose={() => setEditingSession(null)}
           onSave={(updated) => {
-            setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            updateSessionMut.mutate(updated);
             setEditingSession(null);
           }}
         />
@@ -633,33 +722,51 @@ function EmptyChart({ label }: { label: string }) {
 
 function CategoryManager({
   cats,
-  setCats,
+  userId,
   sessions,
   onClose,
+  onChanged,
 }: {
   cats: Cat[];
-  setCats: (c: Cat[]) => void;
+  userId: string;
   sessions: Session[];
   onClose: () => void;
+  onChanged: () => void;
 }) {
   const [name, setName] = useState("");
   const [color, setColor] = useState("#ff7a18");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const used = new Set(sessions.map((s) => s.categoryId));
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    if (editingId) {
-      setCats(cats.map((c) => (c.id === editingId ? { ...c, name: trimmed, color } : c)));
-    } else {
-      setCats([...cats, { id: uid(), name: trimmed, color }]);
+    setSaving(true);
+    try {
+      if (editingId) {
+        const { error } = await supabase
+          .from("timer_categories")
+          .update({ name: trimmed, color })
+          .eq("id", editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("timer_categories")
+          .insert({ user_id: userId, name: trimmed, color });
+        if (error) throw error;
+      }
+      setName("");
+      setColor("#ff7a18");
+      setEditingId(null);
+      onChanged();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setSaving(false);
     }
-    setName("");
-    setColor("#ff7a18");
-    setEditingId(null);
   };
 
   const edit = (c: Cat) => {
@@ -668,13 +775,18 @@ function CategoryManager({
     setColor(c.color);
   };
 
-  const remove = (c: Cat) => {
+  const remove = async (c: Cat) => {
     if (used.has(c.id)) {
-      alert("Não podes eliminar: existem sessões com esta categoria. Apaga-as primeiro.");
+      alert("Não podes eliminar: existem sessões com esta categoria.");
       return;
     }
     if (!confirm(`Eliminar "${c.name}"?`)) return;
-    setCats(cats.filter((x) => x.id !== c.id));
+    const { error } = await supabase.from("timer_categories").delete().eq("id", c.id);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    onChanged();
   };
 
   return (
@@ -708,7 +820,8 @@ function CategoryManager({
           <div className="flex gap-2">
             <button
               type="submit"
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm"
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" /> {editingId ? "Guardar" : "Adicionar"}
             </button>
@@ -733,10 +846,7 @@ function CategoryManager({
               key={c.id}
               className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent/30"
             >
-              <span
-                className="h-3 w-3 rounded-full"
-                style={{ background: c.color }}
-              />
+              <span className="h-3 w-3 rounded-full" style={{ background: c.color }} />
               <span className="flex-1 text-sm">{c.name}</span>
               <button
                 onClick={() => edit(c)}
