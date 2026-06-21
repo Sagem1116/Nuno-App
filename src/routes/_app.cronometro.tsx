@@ -201,6 +201,7 @@ function CronometroPage() {
   );
 
   const [tickNow, setTickNow] = useState(Date.now());
+  const [pickerParentId, setPickerParentId] = useState<string>("");
   const [pickerCatId, setPickerCatId] = useState<string>("");
   const [pickerNote, setPickerNote] = useState("");
   const [pickerReminders, setPickerReminders] = useState<number[]>(() => {
@@ -211,16 +212,30 @@ function CronometroPage() {
   const [editingSession, setEditingSession] = useState<Session | null>(null);
   const [period, setPeriod] = useState<Period>("week");
   const [refDate, setRefDate] = useState<Date>(new Date());
+  const [breakdownMode, setBreakdownMode] = useState<"parent" | "sub">("parent");
 
+  const parentCats = useMemo(() => cats.filter((c) => !c.parentId), [cats]);
+  const subCatsOf = (pid: string) => cats.filter((c) => c.parentId === pid);
+
+  const isPaused = !!activeDb?.paused_at;
   useEffect(() => {
-    if (!activeDb) return;
+    if (!activeDb || isPaused) return;
     const t = setInterval(() => setTickNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [activeDb]);
+  }, [activeDb, isPaused]);
 
   useEffect(() => {
-    if (!pickerCatId && cats[0]) setPickerCatId(cats[0].id);
-  }, [cats, pickerCatId]);
+    if (!pickerParentId && parentCats[0]) setPickerParentId(parentCats[0].id);
+  }, [parentCats, pickerParentId]);
+  useEffect(() => {
+    if (!pickerParentId) return;
+    const subs = subCatsOf(pickerParentId);
+    // If current pickerCatId is not the parent and not one of its subs, reset
+    if (pickerCatId !== pickerParentId && !subs.some((s) => s.id === pickerCatId)) {
+      setPickerCatId(pickerParentId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickerParentId, cats]);
 
   const startMut = useMutation({
     mutationFn: async () => {
