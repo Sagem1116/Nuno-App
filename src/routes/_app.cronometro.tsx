@@ -353,7 +353,16 @@ function CronometroPage() {
 
   const pStart = periodStart(period, refDate);
   const pEnd = periodEnd(period, refDate);
-  const inPeriod = completedSessions.filter((s) => s.startedAt >= pStart && s.startedAt < pEnd);
+  const matchesCatFilter = (catId: string) => {
+    if (parentFilter === "all") return true;
+    if (!catId) return false;
+    if (subFilter !== "all") return catId === subFilter;
+    const c = catById.get(catId);
+    return catId === parentFilter || c?.parentId === parentFilter;
+  };
+  const inPeriod = completedSessions.filter(
+    (s) => s.startedAt >= pStart && s.startedAt < pEnd && matchesCatFilter(s.categoryId),
+  );
   const totalSec = inPeriod.reduce((acc, s) => acc + s.durationSeconds, 0);
 
   const byCategory = useMemo(() => {
