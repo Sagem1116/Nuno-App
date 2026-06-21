@@ -14,6 +14,174 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_categories: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      activity_logs: {
+        Row: {
+          app_name: string
+          category_id: string | null
+          created_at: string
+          duration_seconds: number
+          end_time: string
+          external_id: string | null
+          id: string
+          project_id: string | null
+          source: string
+          start_time: string
+          updated_at: string
+          user_id: string
+          window_title: string
+        }
+        Insert: {
+          app_name?: string
+          category_id?: string | null
+          created_at?: string
+          duration_seconds: number
+          end_time: string
+          external_id?: string | null
+          id?: string
+          project_id?: string | null
+          source?: string
+          start_time: string
+          updated_at?: string
+          user_id: string
+          window_title?: string
+        }
+        Update: {
+          app_name?: string
+          category_id?: string | null
+          created_at?: string
+          duration_seconds?: number
+          end_time?: string
+          external_id?: string | null
+          id?: string
+          project_id?: string | null
+          source?: string
+          start_time?: string
+          updated_at?: string
+          user_id?: string
+          window_title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_logs_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "activity_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_logs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "activity_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activity_projects: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      activity_rules: {
+        Row: {
+          category_id: string | null
+          created_at: string
+          id: string
+          pattern: string
+          priority: number
+          project_id: string | null
+          rule_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          pattern: string
+          priority?: number
+          project_id?: string | null
+          rule_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          pattern?: string
+          priority?: number
+          project_id?: string | null
+          rule_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_rules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "activity_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_rules_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "activity_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       favorites: {
         Row: {
           created_at: string | null

@@ -22,4 +22,5 @@ export const SHORTCUTS: Shortcut[] = [
   { combo: "Alt + P", key: "p", to: "/apps", label: "Apps" },
   { combo: "Alt + I", key: "i", to: "/ai", label: "Nuno AI" },
   { combo: "Alt + A", key: "a", to: "/atalhos", label: "Atalhos" },
+  { combo: "Alt + Y", key: "y", to: "/activity", label: "Activity" },
 ];
