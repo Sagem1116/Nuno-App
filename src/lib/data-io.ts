@@ -36,8 +36,8 @@ const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 export type Table = "notes" | "links" | "transactions" | "tasks" | "timer_categories" | "timer_sessions";
 
 const ALLOWED_FIELDS: Record<Table, string[]> = {
-  notes: ["title", "content", "tags"],
-  links: ["title", "url", "description", "tags"],
+  notes: ["title", "content", "tags", "is_favorite"],
+  links: ["title", "url", "description", "tags", "is_favorite"],
   transactions: ["amount", "type", "category", "description", "occurred_at"],
   tasks: ["title", "description", "priority", "due_date", "status"],
   timer_categories: ["name", "color"],
