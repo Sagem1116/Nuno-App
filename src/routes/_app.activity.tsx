@@ -120,8 +120,15 @@ function ActivityPage() {
 
 function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; projs: Project[] }) {
   const [period, setPeriod] = useState<string>("30");
-  const [catFilter, setCatFilter] = useState<string>("all");
+  const [parentCatFilter, setParentCatFilter] = useState<string>("all");
+  const [subCatFilter, setSubCatFilter] = useState<string>("all");
   const [projFilter, setProjFilter] = useState<string>("all");
+
+  const parents = useMemo(() => cats.filter(c => !c.parent_id), [cats]);
+  const subsOfSelected = useMemo(
+    () => (parentCatFilter === "all" || parentCatFilter === "none" ? [] : cats.filter(c => c.parent_id === parentCatFilter)),
+    [cats, parentCatFilter]
+  );
 
   const range = useMemo(() => {
     const now = new Date();
@@ -132,15 +139,25 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     return { from: Date.now() - days * 24 * 3600 * 1000, to: Infinity };
   }, [period]);
 
+  const matchesCatFilter = (logCatId: string | null) => {
+    if (parentCatFilter === "all") return true;
+    if (parentCatFilter === "none") return !logCatId;
+    if (!logCatId) return false;
+    if (subCatFilter !== "all") return logCatId === subCatFilter;
+    // include parent itself + all its subs
+    const subIds = cats.filter(c => c.parent_id === parentCatFilter).map(c => c.id);
+    return logCatId === parentCatFilter || subIds.includes(logCatId);
+  };
+
   const filtered = useMemo(() => {
     return logs.filter(l => {
       const t = new Date(l.start_time).getTime();
       if (t < range.from || t >= range.to) return false;
-      if (catFilter !== "all" && (l.category_id ?? "none") !== catFilter) return false;
+      if (!matchesCatFilter(l.category_id)) return false;
       if (projFilter !== "all" && (l.project_id ?? "none") !== projFilter) return false;
       return true;
     });
-  }, [logs, range, catFilter, projFilter]);
+  }, [logs, range, parentCatFilter, subCatFilter, projFilter, cats]);
 
   const total = filtered.reduce((a, l) => a + l.duration_seconds, 0);
   const unclassified = filtered.filter(l => !l.category_id).reduce((a, l) => a + l.duration_seconds, 0);
