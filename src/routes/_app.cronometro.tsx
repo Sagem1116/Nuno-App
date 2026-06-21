@@ -548,6 +548,7 @@ function CronometroPage() {
                 idMap = result.idMap;
                 if (result.skipped) toast.warning(`${result.skipped} subcategoria(s) ignoradas por falta da categoria-mãe`);
               }
+              let replaced = 0;
               if (sess.length) {
                 const rows = sess.map((s) => ({
                   user_id: user.id,
@@ -557,12 +558,29 @@ function CronometroPage() {
                   ended_at: s.ended_at ?? null,
                   reminders_minutes: s.reminders_minutes ?? [],
                 }));
+                const { data: existing } = await supabase
+                  .from("timer_sessions")
+                  .select("id,started_at,ended_at")
+                  .eq("user_id", user.id);
+                const keyOf = (st: any, en: any) => `${st ?? ""}|${en ?? ""}`;
+                const existingMap = new Map<string, string>();
+                for (const e of existing ?? []) existingMap.set(keyOf(e.started_at, e.ended_at), e.id);
+                const toDelete: string[] = [];
+                for (const r of rows) {
+                  const id = existingMap.get(keyOf(r.started_at, r.ended_at));
+                  if (id) toDelete.push(id);
+                }
+                if (toDelete.length) {
+                  const { error: delErr } = await supabase.from("timer_sessions").delete().in("id", toDelete);
+                  if (delErr) { toast.error(delErr.message); return; }
+                  replaced = toDelete.length;
+                }
                 const { error } = await supabase.from("timer_sessions").insert(rows);
                 if (error) { toast.error(error.message); return; }
               }
               qc.invalidateQueries({ queryKey: ["timer-sessions", user.id] });
               qc.invalidateQueries({ queryKey: ["timer-categories", user.id] });
-              toast.success(`${sess.length} sessão(ões) importada(s)`);
+              toast.success(`${sess.length} sessão(ões) importada(s)${replaced ? ` · ${replaced} substituída(s)` : ""}`);
             }}
             className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg bg-input border border-border text-xs hover:border-primary/50"
           >
