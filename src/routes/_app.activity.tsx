@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { pickJsonFile, pickJsonFileWithName, exportData, exportTable, importTable, recordImport, getLastImport } from "@/lib/data-io";
+import { pickJsonFile, pickJsonFileWithName, exportData, exportTable, importTable, recordImport, getLastImport, recordLastImportIds, getLastImportIds } from "@/lib/data-io";
 import { Trash2, Upload, Download, Plus, Wand2 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -31,6 +31,7 @@ type Log = {
   id: string; start_time: string; end_time: string; duration_seconds: number;
   app_name: string; window_title: string;
   category_id: string | null; project_id: string | null;
+  external_id?: string | null;
 };
 
 const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#14b8a6"];
@@ -91,6 +92,7 @@ function ActivityPage() {
         <TabsList>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="unclassified">Não classificados</TabsTrigger>
+          <TabsTrigger value="last-import">Último import</TabsTrigger>
           <TabsTrigger value="rules">Regras</TabsTrigger>
           <TabsTrigger value="meta">Categorias & Projetos</TabsTrigger>
           <TabsTrigger value="import">Importar</TabsTrigger>
@@ -101,6 +103,9 @@ function ActivityPage() {
         </TabsContent>
         <TabsContent value="unclassified" className="mt-4">
           <UnclassifiedTab uid={uid!} logs={(logs.data ?? []).filter(l => !l.category_id)} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_logs"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
+        </TabsContent>
+        <TabsContent value="last-import" className="mt-4">
+          <LastImportUnclassifiedTab uid={uid!} allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_logs"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
         </TabsContent>
         <TabsContent value="rules" className="mt-4">
           <RulesTab uid={uid!} rules={rules.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => qc.invalidateQueries({ queryKey: ["activity_rules"] })} />
@@ -337,6 +342,26 @@ function UnclassifiedTab({ uid, logs, cats, projs, onChanged }: { uid: string; l
       {groups.map(g => (
         <UnclassifiedRow key={g.app} uid={uid} app={g.app} totalSec={g.total} entries={g.entries} cats={cats} projs={projs} onChanged={onChanged} />
       ))}
+    </div>
+  );
+}
+
+function LastImportUnclassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string; allLogs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
+  const lastInfo = getLastImport("activity_logs");
+  const ids = useMemo(() => new Set(getLastImportIds("activity_logs")), [allLogs.length]);
+  const logs = useMemo(
+    () => allLogs.filter(l => !l.category_id && l.external_id && ids.has(l.external_id)),
+    [allLogs, ids],
+  );
+  if (!ids.size) return <div className="text-sm text-muted-foreground">Ainda não há registo do último import nesta sessão.</div>;
+  return (
+    <div className="space-y-3">
+      {lastInfo && (
+        <div className="text-xs text-muted-foreground">
+          Último import: <span className="font-medium text-foreground">{lastInfo.filename}</span> em {new Date(lastInfo.at).toLocaleString()} · {ids.size} evento(s) no ficheiro
+        </div>
+      )}
+      <UnclassifiedTab uid={uid} logs={logs} cats={cats} projs={projs} onChanged={onChanged} />
     </div>
   );
 }
@@ -737,6 +762,7 @@ function ImportTab({ uid, rules, logs, onImported }: { uid: string; rules: Rule[
       }
       setPreview({ total: rows.length, matched, unmatched: rows.length - matched });
       recordImport("activity_logs", picked.filename);
+      recordLastImportIds("activity_logs", rows.map(r => r.external_id));
       setLastImport(getLastImport("activity_logs"));
       toast.success(`${rows.length} evento(s) importados`);
       onImported();

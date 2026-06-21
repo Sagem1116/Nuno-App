@@ -549,3 +549,21 @@ export function getLastImport(table: ImportTable): { filename: string; at: numbe
   return readImports().find((e) => e.table === table) ?? null;
 }
 
+const IMPORT_IDS_KEY = "imports:ids:v1";
+
+type ImportIdsMap = Record<string, string[]>;
+
+function readImportIds(): ImportIdsMap {
+  try { return JSON.parse(localStorage.getItem(IMPORT_IDS_KEY) || "{}"); } catch { return {}; }
+}
+
+export function recordLastImportIds(table: ImportTable, ids: string[]) {
+  const m = readImportIds();
+  m[table] = ids.slice(0, 50000);
+  localStorage.setItem(IMPORT_IDS_KEY, JSON.stringify(m));
+}
+
+export function getLastImportIds(table: ImportTable): string[] {
+  return readImportIds()[table] ?? [];
+}
+
