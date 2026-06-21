@@ -761,6 +761,8 @@ const BACKUP_TABLES: { table: DataTable; label: string }[] = [
   { table: "links", label: "Links" },
   { table: "tasks", label: "Tarefas" },
   { table: "transactions", label: "Transações" },
+  { table: "timer_categories", label: "Categorias do cronómetro" },
+  { table: "timer_sessions", label: "Sessões do cronómetro" },
 ];
 
 function BackupsPanel({ userId }: { userId: string | undefined }) {
@@ -803,7 +805,7 @@ function BackupsPanel({ userId }: { userId: string | undefined }) {
               <Download className="h-3.5 w-3.5" /> {busy ? "A exportar..." : "Exportar tudo (JSON)"}
             </button>
             <span className="text-[11px] text-muted-foreground">
-              Descarrega um JSON por cada secção: notas, links, tarefas e transações.
+              Descarrega um JSON por cada secção: notas, links, tarefas, transações, cronómetro.
             </span>
           </div>
 
