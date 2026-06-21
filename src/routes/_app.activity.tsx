@@ -48,7 +48,7 @@ function fmtDuration(sec: number) {
 
 function renderCategoryOptions(cats: Category[]) {
   const parents = cats.filter(c => !c.parent_id);
-  const out: React.ReactNode[] = [];
+  const out: any[] = [];
   for (const p of parents) {
     out.push(<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>);
     for (const s of cats.filter(c => c.parent_id === p.id)) {
