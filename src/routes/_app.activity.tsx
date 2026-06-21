@@ -318,22 +318,29 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             </ResponsiveContainer>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader><CardTitle className="text-base">Horas por projeto</CardTitle></CardHeader>
-          <CardContent style={{ height: 280 }}>
-            {byProj.length === 0 ? <div className="text-sm text-muted-foreground">Sem projetos atribuídos.</div> : (
+        {bySubCat.length > 0 ? (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Horas por subcategoria</CardTitle></CardHeader>
+            <CardContent style={{ height: 280 }}>
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie data={byProj} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
-                    {byProj.map((d, i) => <Cell key={i} fill={d.color} />)}
+                  <Pie data={bySubCat} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
+                    {bySubCat.map((d, i) => <Cell key={i} fill={d.color} />)}
                   </Pie>
                   <Tooltip formatter={(value: number) => fmtDuration(value)} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Horas por subcategoria</CardTitle></CardHeader>
+            <CardContent style={{ height: 280 }} className="flex items-center justify-center">
+              <div className="text-sm text-muted-foreground text-center">Seleciona uma categoria para ver as suas subcategorias.</div>
+            </CardContent>
+          </Card>
+        )}
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle className="text-base">Evolução temporal</CardTitle></CardHeader>
           <CardContent style={{ height: 260 }}>
@@ -362,22 +369,22 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             </ResponsiveContainer>
           </CardContent>
         </Card>
-        {bySubCat.length > 0 && (
-          <Card className="lg:col-span-2">
-            <CardHeader><CardTitle className="text-base">Horas por subcategoria</CardTitle></CardHeader>
-            <CardContent style={{ height: 280 }}>
+        <Card className="lg:col-span-2">
+          <CardHeader><CardTitle className="text-base">Horas por projeto</CardTitle></CardHeader>
+          <CardContent style={{ height: 280 }}>
+            {byProj.length === 0 ? <div className="text-sm text-muted-foreground">Sem projetos atribuídos.</div> : (
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie data={bySubCat} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
-                    {bySubCat.map((d, i) => <Cell key={i} fill={d.color} />)}
+                  <Pie data={byProj} dataKey="value" nameKey="name" outerRadius={90} label={(entry: any) => fmtDuration(entry.value)}>
+                    {byProj.map((d, i) => <Cell key={i} fill={d.color} />)}
                   </Pie>
                   <Tooltip formatter={(value: number) => fmtDuration(value)} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
