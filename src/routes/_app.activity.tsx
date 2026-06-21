@@ -939,13 +939,24 @@ function EditMetaDialog({ table, item, parents, onChanged }: {
 
 // ---------- Classified ----------
 
-function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
+type SortKey = "when" | "app" | "category" | "project" | "duration";
+type SortDir = "asc" | "desc";
+
+function ClassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string; allLogs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
   const [scope, setScope] = useState<"7d" | "30d" | "all">("7d");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [projFilter, setProjFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(50);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("when");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function toggleSort(k: SortKey) {
+    if (sortKey === k) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(k); setSortDir(k === "when" || k === "duration" ? "desc" : "asc"); }
+  }
 
   const filtered = useMemo(() => {
     let arr = allLogs.filter(l => l.category_id);
@@ -961,7 +972,24 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
     return arr;
   }, [allLogs, scope, catFilter, projFilter, search]);
 
-  const visible = filtered.slice(0, visibleCount);
+  const sorted = useMemo(() => {
+    const catName = (id: string | null) => cats.find(c => c.id === id)?.name ?? "";
+    const projName = (id: string | null) => projs.find(p => p.id === id)?.name ?? "";
+    const cmp = (a: Log, b: Log) => {
+      let r = 0;
+      switch (sortKey) {
+        case "when": r = new Date(a.start_time).getTime() - new Date(b.start_time).getTime(); break;
+        case "app": r = (a.app_name || "").localeCompare(b.app_name || ""); break;
+        case "category": r = catName(a.category_id).localeCompare(catName(b.category_id)); break;
+        case "project": r = projName(a.project_id).localeCompare(projName(b.project_id)); break;
+        case "duration": r = a.duration_seconds - b.duration_seconds; break;
+      }
+      return sortDir === "asc" ? r : -r;
+    };
+    return [...filtered].sort(cmp);
+  }, [filtered, sortKey, sortDir, cats, projs]);
+
+  const visible = sorted.slice(0, visibleCount);
   const totalSec = filtered.reduce((a, l) => a + l.duration_seconds, 0);
 
   async function unclassify(id: string) {
@@ -980,6 +1008,32 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
     if (error) { toast.error(error.message); return; }
     onChanged();
   }
+
+  async function deleteAllClassified() {
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from("activity_logs").delete().eq("user_id", uid).not("category_id", "is", null);
+      if (error) throw error;
+      toast.success("Atividades classificadas apagadas");
+      onChanged();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setDeleting(false); }
+  }
+
+  const SortHeader = ({ k, label, align }: { k: SortKey; label: string; align?: "right" }) => (
+    <th className={`p-2 ${align === "right" ? "text-right" : ""}`}>
+      <button
+        type="button"
+        onClick={() => toggleSort(k)}
+        className={`inline-flex items-center gap-1 hover:text-foreground ${sortKey === k ? "text-foreground" : ""}`}
+      >
+        {label}
+        {sortKey === k
+          ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
+          : <ArrowUpDown className="h-3 w-3 opacity-50" />}
+      </button>
+    </th>
+  );
 
   return (
     <div className="space-y-3">
@@ -1008,6 +1062,23 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
           </SelectContent>
         </Select>
         <Input placeholder="Procurar app ou título…" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(50); }} className="w-64" />
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" disabled={deleting} className="text-destructive">
+              <Trash2 className="h-4 w-4 mr-1" /> Apagar todas classificadas
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Apagar TODAS as atividades classificadas?</AlertDialogTitle>
+              <AlertDialogDescription>Esta ação remove permanentemente todos os registos que já têm categoria. Não pode ser desfeita.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={deleteAllClassified}>Apagar tudo</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <div className="text-xs text-muted-foreground ml-auto">
           {filtered.length} registo(s) • {fmtDuration(totalSec)}
         </div>
@@ -1021,11 +1092,11 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
             <table className="w-full text-sm">
               <thead className="border-b border-border">
                 <tr className="text-left text-xs text-muted-foreground">
-                  <th className="p-2">Quando</th>
-                  <th className="p-2">App / Título</th>
-                  <th className="p-2">Categoria</th>
-                  <th className="p-2">Projeto</th>
-                  <th className="p-2 text-right">Duração</th>
+                  <SortHeader k="when" label="Quando" />
+                  <SortHeader k="app" label="App / Título" />
+                  <SortHeader k="category" label="Categoria" />
+                  <SortHeader k="project" label="Projeto" />
+                  <SortHeader k="duration" label="Duração" align="right" />
                   <th className="p-2"></th>
                 </tr>
               </thead>
@@ -1073,10 +1144,10 @@ function ClassifiedTab({ allLogs, cats, projs, onChanged }: { allLogs: Log[]; ca
         </Card>
       )}
 
-      {filtered.length > visible.length && (
+      {sorted.length > visible.length && (
         <div className="flex justify-center">
           <Button variant="outline" size="sm" onClick={() => setVisibleCount(c => c + 50)}>
-            Mostrar mais ({filtered.length - visible.length} restantes)
+            Mostrar mais ({sorted.length - visible.length} restantes)
           </Button>
         </div>
       )}
