@@ -4,7 +4,7 @@ import {
   StickyNote, Link2, CheckSquare, Wallet, Plane, Ticket,
   TrendingUp, TrendingDown, AlertTriangle, ArrowRight, Search, Download, RefreshCw, Star, ExternalLink, Trophy,
 } from "lucide-react";
-import { format, isToday, isPast, parseISO, differenceInCalendarDays, isValid } from "date-fns";
+import { format, isToday, isPast, parseISO, differenceInCalendarDays, isValid, isSameDay, subDays } from "date-fns";
 import { pt } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -92,6 +92,7 @@ function Dashboard() {
   const [newsDays, setNewsDays] = useState<number>(7);
   const [newsLastUpdated, setNewsLastUpdated] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
+  const [periodFilter, setPeriodFilter] = useState<"all" | "today" | "last_day">("all");
 
   const load = async () => {
     setLoading(true);
@@ -135,8 +136,25 @@ function Dashboard() {
 
   const today = new Date();
 
+  const isInPeriod = (dateStr: string | null, period: "all" | "today" | "last_day") => {
+    if (period === "all") return true;
+    const date = parseValidDate(dateStr);
+    if (!date) return false;
+    if (period === "today") return isToday(date);
+    return isSameDay(date, subDays(today, 1));
+  };
+
+  const visibleTasks = useMemo(() => tasks.filter((t) => isInPeriod(t.due_date, periodFilter)), [tasks, periodFilter]);
+  const visibleTxs = useMemo(() => txs.filter((t) => isInPeriod(t.occurred_at, periodFilter)), [txs, periodFilter]);
+  const visibleNotes = useMemo(() => notes.filter((n) => isInPeriod(n.created_at, periodFilter)), [notes, periodFilter]);
+  const visibleLinks = useMemo(() => links.filter((l) => isInPeriod(l.created_at, periodFilter)), [links, periodFilter]);
+  const visibleReservations = useMemo(() => reservations.filter((r) => isInPeriod(r.created_at, periodFilter)), [reservations, periodFilter]);
+  const visibleTrips = useMemo(() => trips.filter((t) => isInPeriod(t.start_date, periodFilter)), [trips, periodFilter]);
+  const visibleFavNotes = useMemo(() => favNotes.filter((n) => isInPeriod(n.created_at, periodFilter)), [favNotes, periodFilter]);
+  const visibleFavLinks = useMemo(() => favLinks.filter((l) => isInPeriod(l.created_at, periodFilter)), [favLinks, periodFilter]);
+
   const taskStats = useMemo(() => {
-    const pending = tasks.filter((t) => t.status === "pending");
+    const pending = visibleTasks.filter((t) => t.status === "pending");
     const overdue = pending.filter((t) => {
       const due = parseValidDate(t.due_date);
       return due && isPast(due) && !isToday(due);
@@ -151,41 +169,42 @@ function Dashboard() {
         return due && !isPast(due);
       })
       .slice(0, 5);
-    const doneCount = tasks.filter((t) => t.status === "done").length;
+    const doneCount = visibleTasks.filter((t) => t.status === "done").length;
     return { pending, overdue, todayTasks, upcoming, doneCount };
-  }, [tasks]);
+  }, [visibleTasks]);
 
   const monthStats = useMemo(() => {
-    const ym = format(today, "yyyy-MM");
-    const m = txs.filter((t) => t.occurred_at.startsWith(ym));
+    const m = periodFilter === "all"
+      ? visibleTxs.filter((t) => t.occurred_at.startsWith(format(today, "yyyy-MM")))
+      : visibleTxs;
     let income = 0, expense = 0;
     for (const t of m) (t.type === "income" ? (income += t.amount) : (expense += t.amount));
     const byCat = new Map<string, number>();
     m.filter((t) => t.type === "expense").forEach((t) => byCat.set(t.category, (byCat.get(t.category) ?? 0) + t.amount));
     const topCats = Array.from(byCat, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 4);
     return { income, expense, balance: income - expense, topCats, count: m.length };
-  }, [txs]);
+  }, [visibleTxs, periodFilter, today]);
 
   const tripStats = useMemo(() => {
-    const upcoming = trips
+    const upcoming = visibleTrips
       .filter((t) => {
         const start = parseValidDate(t.start_date);
         return start && start >= new Date(today.toDateString());
       })
       .slice(0, 3);
-    const active = trips.find((t) => {
+    const active = visibleTrips.find((t) => {
       const s = parseValidDate(t.start_date), e = parseValidDate(t.end_date);
       if (!s || !e) return false;
       return s <= today && today <= e;
     });
-    return { upcoming, active, total: trips.length };
-  }, [trips]);
+    return { upcoming, active, total: visibleTrips.length };
+  }, [visibleTrips, today]);
 
   const upcomingReservations = useMemo(() => {
-    return reservations
+    return visibleReservations
       .filter((r) => r.status !== "cancelled")
       .slice(0, 4);
-  }, [reservations]);
+  }, [visibleReservations]);
 
   const toggleTask = async (t: Task) => {
     const next = t.status === "done" ? "pending" : "done";
@@ -275,7 +294,20 @@ function Dashboard() {
             Olá, <span className="neon-text">{user?.email?.split("@")[0]}</span>
           </h2>
         </div>
-        <Clock />
+        <div className="flex items-center gap-3">
+          <label className="sr-only" htmlFor="period-filter">Período</label>
+          <select
+            id="period-filter"
+            value={periodFilter}
+            onChange={(e) => setPeriodFilter(e.target.value as "all" | "today" | "last_day")}
+            className="input-style text-sm py-2"
+          >
+            <option value="all">Tudo</option>
+            <option value="today">Hoje</option>
+            <option value="last_day">Último dia</option>
+          </select>
+          <Clock />
+        </div>
       </div>
 
       {/* KPI cards */}
@@ -283,7 +315,7 @@ function Dashboard() {
         <Kpi
           to="/tarefas"
           icon={CheckSquare}
-          label="Tarefas hoje"
+          label={periodFilter === "last_day" ? "Tarefas ontem" : "Tarefas hoje"}
           value={taskStats.todayTasks.length}
           sub={taskStats.overdue.length > 0 ? `${taskStats.overdue.length} atrasada(s)` : `${taskStats.pending.length} pendentes`}
           danger={taskStats.overdue.length > 0}
@@ -291,7 +323,7 @@ function Dashboard() {
         <Kpi
           to="/financas"
           icon={Wallet}
-          label={`Saldo · ${format(today, "MMM", { locale: pt })}`}
+          label={`Saldo · ${periodFilter === "all" ? format(today, "MMM", { locale: pt }) : periodFilter === "today" ? "Hoje" : "Ontem"}`}
           value={fmtEur(monthStats.balance)}
           sub={`${fmtEur(monthStats.income)} · -${fmtEur(monthStats.expense)}`}
           tone={monthStats.balance >= 0 ? "good" : "bad"}
@@ -299,7 +331,7 @@ function Dashboard() {
         <Kpi
           to="/viagens"
           icon={Plane}
-          label="Próxima viagem"
+          label={periodFilter === "all" ? "Próxima viagem" : periodFilter === "today" ? "Viagem hoje" : "Viagem ontem"}
           value={tripStats.upcoming[0]?.destination ?? tripStats.active?.destination ?? "—"}
           sub={daysUntil(tripStats.upcoming[0]?.start_date, today) !== null
             ? `em ${daysUntil(tripStats.upcoming[0]?.start_date, today)} dias`
@@ -308,19 +340,19 @@ function Dashboard() {
         <Kpi
           to="/reservas"
           icon={Ticket}
-          label="Reservas"
-          value={reservations.filter((r) => r.status !== "cancelled").length}
-          sub={`${reservations.filter((r) => r.status === "confirmed").length} confirmadas`}
+          label={periodFilter === "all" ? "Reservas" : periodFilter === "today" ? "Reservas hoje" : "Reservas ontem"}
+          value={visibleReservations.filter((r) => r.status !== "cancelled").length}
+          sub={`${visibleReservations.filter((r) => r.status === "confirmed").length} confirmadas`}
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel title="Notas favoritas" icon={Star} to="/notas">
-          {favNotes.length === 0 ? (
+          {visibleFavNotes.length === 0 ? (
             <Empty text="Sem notas nos favoritos" />
           ) : (
             <ul className="space-y-1">
-              {favNotes.map((n) => (
+              {visibleFavNotes.map((n) => (
                 <li key={n.id}>
                   <button
                     onClick={() => setViewingNote(n)}
@@ -337,11 +369,11 @@ function Dashboard() {
         </Panel>
 
         <Panel title="Links favoritos" icon={Star} to="/links">
-          {favLinks.length === 0 ? (
+          {visibleFavLinks.length === 0 ? (
             <Empty text="Sem links nos favoritos" />
           ) : (
             <ul className="space-y-1">
-              {favLinks.map((l) => (
+              {visibleFavLinks.map((l) => (
                 <li key={l.id}>
                   <a
                     href={l.url}
@@ -395,7 +427,7 @@ function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Tasks panel - spans 2 */}
         <Panel
-          title="Tarefas"
+          title={periodFilter === "all" ? "Tarefas" : periodFilter === "today" ? "Tarefas hoje" : "Tarefas ontem"}
           icon={CheckSquare}
           to="/tarefas"
           className="lg:col-span-2"
@@ -438,13 +470,13 @@ function Dashboard() {
         </Panel>
 
         {/* Finance panel */}
-        <Panel title="Finanças do mês" icon={Wallet} to="/financas">
+        <Panel title={periodFilter === "all" ? "Finanças do mês" : periodFilter === "today" ? "Finanças de hoje" : "Finanças de ontem"} icon={Wallet} to="/financas">
           <div className="grid grid-cols-2 gap-2 mb-3">
             <Mini icon={TrendingUp} tone="good" label="Receitas" value={fmtEur(monthStats.income)} />
             <Mini icon={TrendingDown} tone="bad" label="Despesas" value={fmtEur(monthStats.expense)} />
           </div>
           {monthStats.topCats.length === 0 ? (
-            <Empty text="Sem transações este mês" />
+            <Empty text={periodFilter === "all" ? "Sem transações este mês" : periodFilter === "today" ? "Sem transações hoje" : "Sem transações ontem"} />
           ) : (
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground">Top categorias</div>
@@ -567,7 +599,7 @@ function Dashboard() {
         </Panel>
 
         {/* Viagens */}
-        <Panel title="Viagens" icon={Plane} to="/viagens">
+        <Panel title={periodFilter === "all" ? "Viagens" : periodFilter === "today" ? "Viagens hoje" : "Viagens ontem"} icon={Plane} to="/viagens">
           {tripStats.active && (
             <div className="mb-3 px-3 py-2 rounded-md border border-primary/40 bg-primary/10">
               <div className="text-xs text-primary">Em curso</div>
@@ -575,7 +607,7 @@ function Dashboard() {
             </div>
           )}
           {tripStats.upcoming.length === 0 && !tripStats.active ? (
-            <Empty text="Sem viagens planeadas" />
+            <Empty text={periodFilter === "all" ? "Sem viagens planeadas" : "Sem viagens"} />
           ) : (
             <ul className="space-y-2">
               {tripStats.upcoming.map((t) => (
@@ -599,7 +631,7 @@ function Dashboard() {
         </Panel>
 
         {/* Reservas */}
-        <Panel title="Reservas recentes" icon={Ticket} to="/reservas">
+        <Panel title={periodFilter === "all" ? "Reservas recentes" : periodFilter === "today" ? "Reservas hoje" : "Reservas ontem"} icon={Ticket} to="/reservas">
           {upcomingReservations.length === 0 ? (
             <Empty text="Sem reservas" />
           ) : (
@@ -618,10 +650,10 @@ function Dashboard() {
         </Panel>
 
         {/* Notas */}
-        <Panel title="Notas recentes" icon={StickyNote} to="/notas">
-          {notes.length === 0 ? <Empty text="Sem notas" /> : (
+        <Panel title={periodFilter === "all" ? "Notas recentes" : periodFilter === "today" ? "Notas de hoje" : "Notas de ontem"} icon={StickyNote} to="/notas">
+          {visibleNotes.length === 0 ? <Empty text="Sem notas" /> : (
             <ul className="space-y-1">
-              {notes.map((n) => (
+              {visibleNotes.map((n) => (
                 <li key={n.id} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-accent/40 text-sm">
                   <span className="truncate">{n.title || "Sem título"}</span>
                   <span className="text-xs text-muted-foreground shrink-0">{fmtDate(n.created_at, "d MMM")}</span>
@@ -632,10 +664,10 @@ function Dashboard() {
         </Panel>
 
         {/* Links */}
-        <Panel title="Links recentes" icon={Link2} to="/links">
-          {links.length === 0 ? <Empty text="Sem links" /> : (
+        <Panel title={periodFilter === "all" ? "Links recentes" : periodFilter === "today" ? "Links de hoje" : "Links de ontem"} icon={Link2} to="/links">
+          {visibleLinks.length === 0 ? <Empty text="Sem links" /> : (
             <ul className="space-y-1">
-              {links.map((l) => (
+              {visibleLinks.map((l) => (
                 <li key={l.id} className="px-2 py-1.5 rounded-md hover:bg-accent/40">
                   <a href={l.url} target="_blank" rel="noreferrer" className="text-sm truncate block">
                     {l.title || l.url}
