@@ -31,6 +31,7 @@ type Log = {
   id: string; start_time: string; end_time: string; duration_seconds: number;
   app_name: string; window_title: string;
   category_id: string | null; project_id: string | null;
+  external_id?: string | null;
 };
 
 const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#14b8a6"];
