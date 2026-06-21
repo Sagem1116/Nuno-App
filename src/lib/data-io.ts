@@ -105,7 +105,7 @@ export async function exportTable(table: Table, opts?: { silent?: boolean }) {
   const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: false });
   if (error) { if (!opts?.silent) toast.error(error.message); return null; }
   const filename = `${table}-${stamp()}.json`;
-  downloadJson(filename, { version: 1, table, exported_at: new Date().toISOString(), items: data ?? [] });
+  downloadJson(filename, buildEnvelope(table, { items: data ?? [] }));
   if (!opts?.silent) toast.success(`${(data ?? []).length} item(s) exportados`);
   recordVersion(table, filename, (data ?? []).length);
   return filename;
@@ -114,6 +114,7 @@ export async function exportTable(table: Table, opts?: { silent?: boolean }) {
 export async function importTable(table: Table, userId: string) {
   const parsed = await pickJsonFile();
   if (!parsed) return;
+  if (!validateEnvelope(parsed, table)) return;
   if (table === "activity_setup") {
     await importActivitySetup(userId, parsed);
     return;
