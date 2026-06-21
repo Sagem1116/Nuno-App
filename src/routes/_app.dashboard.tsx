@@ -427,7 +427,7 @@ function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Tasks panel - spans 2 */}
         <Panel
-          title="Tarefas"
+          title={periodFilter === "all" ? "Tarefas" : periodFilter === "today" ? "Tarefas hoje" : "Tarefas ontem"}
           icon={CheckSquare}
           to="/tarefas"
           className="lg:col-span-2"
