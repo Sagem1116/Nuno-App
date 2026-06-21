@@ -138,9 +138,54 @@ export async function importTable(table: Table, userId: string) {
     return row;
   }).filter((r) => allowed.some((k) => r[k] !== undefined));
   if (!rows.length) { toast.error("Estrutura JSON não reconhecida"); return; }
+  if (table === "timer_sessions") {
+    const result = await replaceMatchingTimerSessions(rows, userId);
+    if (!result.ok) { toast.error(result.error); return; }
+    toast.success(`${result.inserted} sessão(ões) importada(s)${result.replaced ? ` · ${result.replaced} substituída(s)` : ""}`);
+    return;
+  }
   const { error } = await supabase.from(table).insert(rows as any);
   if (error) { toast.error(error.message); return; }
   toast.success(`${rows.length} item(s) importados`);
+}
+
+type TimerSessionImportResult =
+  | { ok: true; inserted: number; replaced: number }
+  | { ok: false; error: string; inserted: number; replaced: number };
+
+async function replaceMatchingTimerSessions(rows: Record<string, unknown>[], userId: string): Promise<TimerSessionImportResult> {
+  const validRows = rows.filter((s) => s.started_at && s.ended_at);
+  if (!validRows.length) return { ok: true, inserted: 0, replaced: 0 };
+  const timestampKey = (value: unknown) => {
+    const ms = Date.parse(String(value ?? ""));
+    return Number.isFinite(ms) ? String(Math.round(ms / 1000)) : String(value ?? "").trim();
+  };
+  const durationKey = (s: Record<string, unknown>) => {
+    const started = Date.parse(String(s.started_at ?? ""));
+    const ended = Date.parse(String(s.ended_at ?? ""));
+    const paused = Number(s.paused_ms ?? 0) || 0;
+    return Number.isFinite(started) && Number.isFinite(ended)
+      ? String(Math.max(0, Math.round((ended - started - paused) / 1000)))
+      : "";
+  };
+  const sessionKey = (s: Record<string, unknown>) => `${timestampKey(s.started_at)}|${timestampKey(s.ended_at)}|${durationKey(s)}`;
+  const uniqueRows = Array.from(new Map(validRows.map((r) => [sessionKey(r), r])).values());
+  const { data: existing, error: existingError } = await supabase
+    .from("timer_sessions")
+    .select("id,started_at,ended_at,paused_ms")
+    .eq("user_id", userId);
+  if (existingError) return { ok: false, error: existingError.message, inserted: 0, replaced: 0 };
+  const importedKeys = new Set(uniqueRows.map(sessionKey));
+  const toDelete = (existing ?? [])
+    .filter((e) => importedKeys.has(sessionKey(e as Record<string, unknown>)))
+    .map((e) => e.id);
+  if (toDelete.length) {
+    const { error } = await supabase.from("timer_sessions").delete().in("id", toDelete);
+    if (error) return { ok: false, error: error.message, inserted: 0, replaced: 0 };
+  }
+  const { error } = await supabase.from("timer_sessions").insert(uniqueRows as any);
+  if (error) return { ok: false, error: error.message, inserted: 0, replaced: toDelete.length };
+  return { ok: true, inserted: uniqueRows.length, replaced: toDelete.length };
 }
 
 export async function importHierarchicalCategories(

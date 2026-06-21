@@ -550,32 +550,46 @@ function CronometroPage() {
               }
               let replaced = 0;
               if (sess.length) {
-                const rows = sess.map((s) => ({
+                const importedRows = sess.map((s) => ({
                   user_id: user.id,
                   category_id: s.category_id ? (idMap.get(s.category_id) ?? null) : null,
                   note: s.note ?? null,
                   started_at: s.started_at,
                   ended_at: s.ended_at ?? null,
                   reminders_minutes: s.reminders_minutes ?? [],
-                }));
-                const { data: existing } = await supabase
+                  paused_at: s.paused_at ?? null,
+                  paused_ms: s.paused_ms ?? 0,
+                })).filter((s) => s.started_at && s.ended_at);
+                const timestampKey = (value: any) => {
+                  const ms = Date.parse(String(value ?? ""));
+                  return Number.isFinite(ms) ? String(Math.round(ms / 1000)) : String(value ?? "").trim();
+                };
+                const durationKey = (s: { started_at: any; ended_at: any; paused_ms?: any }) => {
+                  const started = Date.parse(String(s.started_at ?? ""));
+                  const ended = Date.parse(String(s.ended_at ?? ""));
+                  const paused = Number(s.paused_ms ?? 0) || 0;
+                  return Number.isFinite(started) && Number.isFinite(ended)
+                    ? String(Math.max(0, Math.round((ended - started - paused) / 1000)))
+                    : "";
+                };
+                const sessionKey = (s: { started_at: any; ended_at: any; paused_ms?: any }) =>
+                  `${timestampKey(s.started_at)}|${timestampKey(s.ended_at)}|${durationKey(s)}`;
+                const uniqueRows = Array.from(new Map(importedRows.map((r) => [sessionKey(r), r])).values());
+                const { data: existing, error: existingErr } = await supabase
                   .from("timer_sessions")
-                  .select("id,started_at,ended_at")
+                  .select("id,started_at,ended_at,paused_ms")
                   .eq("user_id", user.id);
-                const keyOf = (st: any, en: any) => `${st ?? ""}|${en ?? ""}`;
-                const existingMap = new Map<string, string>();
-                for (const e of existing ?? []) existingMap.set(keyOf(e.started_at, e.ended_at), e.id);
-                const toDelete: string[] = [];
-                for (const r of rows) {
-                  const id = existingMap.get(keyOf(r.started_at, r.ended_at));
-                  if (id) toDelete.push(id);
-                }
+                if (existingErr) { toast.error(existingErr.message); return; }
+                const importedKeys = new Set(uniqueRows.map(sessionKey));
+                const toDelete = (existing ?? [])
+                  .filter((e) => importedKeys.has(sessionKey(e)))
+                  .map((e) => e.id);
                 if (toDelete.length) {
                   const { error: delErr } = await supabase.from("timer_sessions").delete().in("id", toDelete);
                   if (delErr) { toast.error(delErr.message); return; }
                   replaced = toDelete.length;
                 }
-                const { error } = await supabase.from("timer_sessions").insert(rows);
+                const { error } = await supabase.from("timer_sessions").insert(uniqueRows);
                 if (error) { toast.error(error.message); return; }
               }
               qc.invalidateQueries({ queryKey: ["timer-sessions", user.id] });
