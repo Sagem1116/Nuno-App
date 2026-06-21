@@ -119,20 +119,28 @@ function ActivityPage() {
 // ---------- Dashboard ----------
 
 function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; projs: Project[] }) {
-  const [days, setDays] = useState(30);
+  const [period, setPeriod] = useState<string>("30");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [projFilter, setProjFilter] = useState<string>("all");
 
+  const range = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    if (period === "today") return { from: startOfToday, to: startOfToday + 24 * 3600 * 1000 };
+    if (period === "yesterday") return { from: startOfToday - 24 * 3600 * 1000, to: startOfToday };
+    const days = Number(period) || 30;
+    return { from: Date.now() - days * 24 * 3600 * 1000, to: Infinity };
+  }, [period]);
+
   const filtered = useMemo(() => {
-    const since = Date.now() - days * 24 * 3600 * 1000;
     return logs.filter(l => {
       const t = new Date(l.start_time).getTime();
-      if (t < since) return false;
+      if (t < range.from || t >= range.to) return false;
       if (catFilter !== "all" && (l.category_id ?? "none") !== catFilter) return false;
       if (projFilter !== "all" && (l.project_id ?? "none") !== projFilter) return false;
       return true;
     });
-  }, [logs, days, catFilter, projFilter]);
+  }, [logs, range, catFilter, projFilter]);
 
   const total = filtered.reduce((a, l) => a + l.duration_seconds, 0);
   const unclassified = filtered.filter(l => !l.category_id).reduce((a, l) => a + l.duration_seconds, 0);
