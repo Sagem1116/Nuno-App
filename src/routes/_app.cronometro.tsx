@@ -355,15 +355,39 @@ function CronometroPage() {
   const totalSec = inPeriod.reduce((acc, s) => acc + s.durationSeconds, 0);
 
   const byCategory = useMemo(() => {
+    // Aggregate by parent category (so subcategories roll up under their parent's color).
     const map = new Map<string, { name: string; color: string; value: number }>();
     for (const s of inPeriod) {
-      const row = map.get(s.categoryId) ?? {
-        name: s.categoryName,
-        color: s.categoryColor,
+      const key = s.parentId ?? s.categoryId;
+      const row = map.get(key) ?? {
+        name: s.parentName,
+        color: s.parentColor,
         value: 0,
       };
       row.value += s.durationSeconds;
-      map.set(s.categoryId, row);
+      map.set(key, row);
+    }
+    return Array.from(map.values()).sort((a, b) => b.value - a.value);
+  }, [inPeriod]);
+
+  const bySubcategory = useMemo(() => {
+    // Break down each parent into its subcategories (+ note when there's no subcategory).
+    type Row = { key: string; parentName: string; parentColor: string; subName: string; color: string; value: number };
+    const map = new Map<string, Row>();
+    for (const s of inPeriod) {
+      const isSub = s.parentId && s.parentId !== s.categoryId;
+      const subName = isSub ? s.categoryName : (s.note || "—");
+      const key = `${s.parentId ?? s.categoryId}::${subName}`;
+      const row = map.get(key) ?? {
+        key,
+        parentName: s.parentName,
+        parentColor: s.parentColor,
+        subName,
+        color: isSub ? s.categoryColor : s.parentColor,
+        value: 0,
+      };
+      row.value += s.durationSeconds;
+      map.set(key, row);
     }
     return Array.from(map.values()).sort((a, b) => b.value - a.value);
   }, [inPeriod]);
