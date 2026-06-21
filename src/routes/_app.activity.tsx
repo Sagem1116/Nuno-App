@@ -244,11 +244,11 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
           <CardContent style={{ height: 260 }}>
             <ResponsiveContainer>
               <LineChart data={timeline}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" />
-                <YAxis stroke="hsl(var(--muted-foreground))" />
-                <Tooltip />
-                <Line type="monotone" dataKey="hours" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="date" stroke="var(--muted-foreground)" />
+                <YAxis stroke="var(--muted-foreground)" />
+                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} />
+                <Line type="monotone" dataKey="hours" stroke="var(--primary)" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -258,11 +258,11 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
           <CardContent style={{ height: 320 }}>
             <ResponsiveContainer>
               <BarChart data={byApp} layout="vertical" margin={{ left: 80 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
-                <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" width={140} />
-                <Tooltip />
-                <Bar dataKey="hours" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis type="number" stroke="var(--muted-foreground)" />
+                <YAxis type="category" dataKey="name" stroke="var(--muted-foreground)" width={140} />
+                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} />
+                <Bar dataKey="hours" fill="var(--primary)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
