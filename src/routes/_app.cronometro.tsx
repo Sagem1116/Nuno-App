@@ -448,7 +448,14 @@ function CronometroPage() {
 
   const activeStartedAt = activeDb ? Date.parse(activeDb.started_at) : 0;
   const activeCat = activeDb?.category_id ? catById.get(activeDb.category_id) : undefined;
-  const elapsedActive = activeDb ? Math.floor((tickNow - activeStartedAt) / 1000) : 0;
+  const activeParent = activeCat?.parentId ? catById.get(activeCat.parentId) : activeCat;
+  const activePausedAt = activeDb?.paused_at ? Date.parse(activeDb.paused_at) : 0;
+  const activePausedMs = activeDb?.paused_ms ?? 0;
+  const elapsedActive = activeDb
+    ? Math.floor(
+        ((activePausedAt ? activePausedAt : tickNow) - activeStartedAt - activePausedMs) / 1000,
+      )
+    : 0;
 
   useNativeTimerMirror(
     activeDb
@@ -458,7 +465,7 @@ function CronometroPage() {
           categoryName: activeCat?.name ?? "—",
           categoryColor: activeCat?.color ?? "#888",
           note: activeDb.note ?? "",
-          startedAt: activeStartedAt,
+          startedAt: activeStartedAt + activePausedMs + (activePausedAt ? Date.now() - activePausedAt : 0),
           reminders: activeDb.reminders_minutes ?? [],
         }
       : { active: false },
