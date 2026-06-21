@@ -46,6 +46,24 @@ function fmtDuration(sec: number) {
   return h % 1 === 0 ? `${Math.round(h)}h` : `${h.toFixed(1)}h`;
 }
 
+function renderCategoryOptions(cats: Category[]) {
+  const parents = cats.filter(c => !c.parent_id);
+  const out: React.ReactNode[] = [];
+  for (const p of parents) {
+    out.push(<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>);
+    for (const s of cats.filter(c => c.parent_id === p.id)) {
+      out.push(<SelectItem key={s.id} value={s.id}>{"\u00A0\u00A0↳ "}{s.name}</SelectItem>);
+    }
+  }
+  // include orphan subs (parent missing) at end so nothing is hidden
+  for (const c of cats) {
+    if (c.parent_id && !parents.find(p => p.id === c.parent_id)) {
+      out.push(<SelectItem key={c.id} value={c.id}>↳ {c.name}</SelectItem>);
+    }
+  }
+  return out;
+}
+
 function ActivityPage() {
   const { user } = useAuth();
   const uid = user?.id;
