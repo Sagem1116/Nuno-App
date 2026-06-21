@@ -753,7 +753,7 @@ function ImportTab({ uid, rules, logs, onImported }: { uid: string; rules: Rule[
           </p>
           <div className="flex gap-2">
             <Button onClick={doImport} disabled={busy}><Upload className="h-4 w-4 mr-1" /> {busy ? "A importar..." : "Importar JSON"}</Button>
-            <Button variant="outline" onClick={() => exportData("activity_logs", { version: 1, items: logs })}>
+            <Button variant="outline" onClick={() => exportData("activity_logs", { items: logs })}>
               <Download className="h-4 w-4 mr-1" /> Exportar logs
             </Button>
           </div>

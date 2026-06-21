@@ -13,7 +13,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useNativeTimerMirror } from "@/lib/native-timer-mirror";
-import { downloadJson, importHierarchicalCategories, pickJsonFile } from "@/lib/data-io";
+import { buildEnvelope, downloadJson, importHierarchicalCategories, pickJsonFile, validateEnvelope } from "@/lib/data-io";
 import { toast } from "sonner";
 import {
   Table,
@@ -525,10 +525,9 @@ function CronometroPage() {
                 supabase.from("timer_sessions").select("*"),
               ]);
               const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-              downloadJson(`cronometro-${stamp}.json`, {
-                version: 1, exported_at: new Date().toISOString(),
+              downloadJson(`cronometro-${stamp}.json`, buildEnvelope("cronometro_full", {
                 categories: cs ?? [], sessions: ss ?? [],
-              });
+              }));
               toast.success(`${(ss ?? []).length} sessão(ões) exportada(s)`);
             }}
             className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg bg-input border border-border text-xs hover:border-primary/50"
@@ -540,6 +539,7 @@ function CronometroPage() {
               if (!user) return;
               const parsed: any = await pickJsonFile();
               if (!parsed) return;
+              if (!validateEnvelope(parsed, "cronometro_full")) return;
               const cats: any[] = Array.isArray(parsed?.categories) ? parsed.categories : [];
               const sess: any[] = Array.isArray(parsed?.sessions) ? parsed.sessions : [];
               let idMap = new Map<string, string>();
