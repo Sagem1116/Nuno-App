@@ -4,7 +4,7 @@ import {
   StickyNote, Link2, CheckSquare, Wallet, Plane, Ticket,
   TrendingUp, TrendingDown, AlertTriangle, ArrowRight, Search, Download, RefreshCw, Star, ExternalLink, Trophy,
 } from "lucide-react";
-import { format, isToday, isPast, parseISO, differenceInCalendarDays, isValid } from "date-fns";
+import { format, isToday, isPast, parseISO, differenceInCalendarDays, isValid, isSameDay, subDays } from "date-fns";
 import { pt } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
