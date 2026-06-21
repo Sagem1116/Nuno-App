@@ -92,6 +92,7 @@ function ActivityPage() {
         <TabsList>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="unclassified">Por classificar</TabsTrigger>
+          <TabsTrigger value="classified">Classificadas</TabsTrigger>
           <TabsTrigger value="rules">Regras</TabsTrigger>
           <TabsTrigger value="meta">Categorias & Projetos</TabsTrigger>
           <TabsTrigger value="import">Importar</TabsTrigger>
@@ -103,11 +104,14 @@ function ActivityPage() {
         <TabsContent value="unclassified" className="mt-4">
           <UnclassifiedTab uid={uid!} allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_logs"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
         </TabsContent>
+        <TabsContent value="classified" className="mt-4">
+          <ClassifiedTab allLogs={logs.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => qc.invalidateQueries({ queryKey: ["activity_logs"] })} />
+        </TabsContent>
         <TabsContent value="rules" className="mt-4">
-          <RulesTab uid={uid!} rules={rules.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => qc.invalidateQueries({ queryKey: ["activity_rules"] })} />
+          <RulesTab uid={uid!} rules={rules.data ?? []} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_rules"] }); qc.invalidateQueries({ queryKey: ["activity_logs"] }); }} />
         </TabsContent>
         <TabsContent value="meta" className="mt-4">
-          <MetaTab uid={uid!} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_categories"] }); qc.invalidateQueries({ queryKey: ["activity_projects"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); }} />
+          <MetaTab uid={uid!} cats={cats.data ?? []} projs={projs.data ?? []} onChanged={() => { qc.invalidateQueries({ queryKey: ["activity_categories"] }); qc.invalidateQueries({ queryKey: ["activity_projects"] }); qc.invalidateQueries({ queryKey: ["activity_rules"] }); qc.invalidateQueries({ queryKey: ["activity_logs"] }); }} />
         </TabsContent>
         <TabsContent value="import" className="mt-4">
           <ImportTab uid={uid!} rules={rules.data ?? []} logs={logs.data ?? []} onImported={() => qc.invalidateQueries({ queryKey: ["activity_logs"] })} />
