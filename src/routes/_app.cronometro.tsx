@@ -1333,12 +1333,16 @@ function SessionEditor({
       return;
     }
     const effectiveId = subId || parentId;
-    const cat = cats.find((c) => c.id === effectiveId) ?? cats[0];
+    const cat = cats.find((c) => c.id === effectiveId);
+    const parentCat = cat?.parentId ? cats.find((c) => c.id === cat.parentId) : cat;
     onSave({
       ...session,
       categoryId: cat?.id ?? session.categoryId,
       categoryName: cat?.name ?? session.categoryName,
       categoryColor: cat?.color ?? session.categoryColor,
+      parentId: parentCat?.id ?? null,
+      parentName: parentCat?.name ?? cat?.name ?? session.parentName,
+      parentColor: parentCat?.color ?? cat?.color ?? session.parentColor,
       note: note.trim(),
       startedAt,
       endedAt,
