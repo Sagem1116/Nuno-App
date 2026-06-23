@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Plus, Trash2, Pencil, X, Wallet, TrendingUp, TrendingDown, Search,
-  Download, Upload, Tags as TagsIcon, Check,
+  Download, Upload, Tags as TagsIcon, Check, ArrowRightLeft,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/auth";
 import { Field, inputCls } from "@/routes/_app.notas";
 import { exportTable, importTable } from "@/lib/data-io";
 import { AutoExportMenu } from "@/components/auto-export-menu";
+import { DangerZone, deleteAllForUser } from "@/components/danger-zone";
 
 export const Route = createFileRoute("/_app/financas")({
   component: FinancasPage,
