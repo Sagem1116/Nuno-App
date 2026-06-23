@@ -177,12 +177,19 @@ function Dashboard() {
     const m = periodFilter === "all"
       ? visibleTxs.filter((t) => t.occurred_at.startsWith(format(today, "yyyy-MM")))
       : visibleTxs;
-    let income = 0, expense = 0;
-    for (const t of m) (t.type === "income" ? (income += t.amount) : (expense += t.amount));
+    let income = 0, expense = 0, savings = 0;
+    for (const t of m) {
+      if (t.type === "income") income += t.amount;
+      else expense += t.amount;
+      const cat = (t.category || "").toLowerCase().normalize("NFC");
+      if (cat === "poupanças") savings += t.type === "income" ? t.amount : -t.amount;
+    }
+    const balance = income - expense;
+    const personal = balance - savings;
     const byCat = new Map<string, number>();
     m.filter((t) => t.type === "expense").forEach((t) => byCat.set(t.category, (byCat.get(t.category) ?? 0) + t.amount));
     const topCats = Array.from(byCat, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 4);
-    return { income, expense, balance: income - expense, topCats, count: m.length };
+    return { income, expense, balance, savings, personal, topCats, count: m.length };
   }, [visibleTxs, periodFilter, today]);
 
   const tripStats = useMemo(() => {
