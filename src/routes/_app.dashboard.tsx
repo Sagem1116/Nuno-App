@@ -175,15 +175,25 @@ function Dashboard() {
     const m = periodFilter === "all"
       ? visibleTxs.filter((t) => t.occurred_at.startsWith(format(today, "yyyy-MM")))
       : visibleTxs;
-    let income = 0, expense = 0, savings = 0;
+    let income = 0, expense = 0;
+    let personalIncome = 0, personalExpense = 0;
+    let savingsIn = 0, savingsOut = 0;
     for (const t of m) {
-      if (t.type === "income") income += t.amount;
-      else expense += t.amount;
       const cat = (t.category || "").toLowerCase().normalize("NFC");
-      if (cat === "poupanças") savings += t.type === "income" ? t.amount : -t.amount;
+      if (t.type === "income") {
+        income += t.amount;
+        if (cat === "poupanças") savingsIn += t.amount;
+        else personalIncome += t.amount;
+      } else {
+        expense += t.amount;
+        // "transferência" out of personal IS a personal expense (money leaving personal).
+        if (cat === "poupanças") savingsOut += t.amount;
+        else personalExpense += t.amount;
+      }
     }
     const balance = income - expense;
-    const personal = balance - savings;
+    const savings = savingsIn - savingsOut;
+    const personal = personalIncome - personalExpense;
     const byCat = new Map<string, number>();
     m.filter((t) => t.type === "expense").forEach((t) => byCat.set(t.category, (byCat.get(t.category) ?? 0) + t.amount));
     const topCats = Array.from(byCat, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 4);
