@@ -617,7 +617,7 @@ export async function importAllCombined(userId: string): Promise<void> {
       })
       .filter((r) => allowed.some((k) => r[k] !== undefined));
     if (!rows.length) return 0;
-    const { error } = await supabase.from(table).insert(rows as any);
+    const { error } = await (supabase as any).from(table).insert(rows);
     if (error) { errors.push(`${table}: ${error.message}`); return 0; }
     return rows.length;
   };
