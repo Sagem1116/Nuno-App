@@ -548,7 +548,7 @@ export async function exportAllCombined(opts?: { silent?: boolean }): Promise<st
   const sections: Record<string, unknown> = {};
   let total = 0;
   try {
-    const [n, l, ta, tr, tc, ts, ac, ap, ar] = await Promise.all([
+    const [n, l, ta, tr, tc, ts, ac, ap, ar, trips] = await Promise.all([
       supabase.from("notes").select("*").order("created_at", { ascending: false }),
       supabase.from("links").select("*").order("created_at", { ascending: false }),
       supabase.from("tasks").select("*").order("created_at", { ascending: false }),
@@ -558,6 +558,7 @@ export async function exportAllCombined(opts?: { silent?: boolean }): Promise<st
       (supabase as any).from("activity_categories").select("*").order("created_at", { ascending: true }),
       (supabase as any).from("activity_projects").select("*").order("created_at", { ascending: true }),
       (supabase as any).from("activity_rules").select("*").order("priority", { ascending: false }),
+      collectAllTrips(),
     ]);
     const firstErr = [n, l, ta, tr, tc, ts, ac, ap, ar].find((r) => r.error)?.error;
     if (firstErr) {
@@ -576,10 +577,12 @@ export async function exportAllCombined(opts?: { silent?: boolean }): Promise<st
       projects: ap.data ?? [],
       rules: ar.data ?? [],
     };
+    sections.trips = trips;
     total =
       (n.data?.length ?? 0) + (l.data?.length ?? 0) + (ta.data?.length ?? 0) +
       (tr.data?.length ?? 0) + (tc.data?.length ?? 0) + (ts.data?.length ?? 0) +
-      (ac.data?.length ?? 0) + (ap.data?.length ?? 0) + (ar.data?.length ?? 0);
+      (ac.data?.length ?? 0) + (ap.data?.length ?? 0) + (ar.data?.length ?? 0) +
+      (trips?.length ?? 0);
   } catch (e: any) {
     if (!opts?.silent) toast.error(e?.message ?? "Erro a exportar");
     setLastAutoExportResult({ ok: false, at: Date.now(), error: e?.message ?? "Erro" });
