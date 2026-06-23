@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { createPortal } from "react-dom";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Play, Square, Plus, Pencil, Trash2, X, Timer, Tags as TagsIcon, Loader2,
@@ -1664,132 +1664,55 @@ function ActiveTimerExtras({
   );
 }
 
-function FloatingWindowButton({
-  startedAt,
-  categoryName,
-  categoryColor,
-  note,
-  onStop,
-}: {
+function FloatingWindowButton(_: {
   startedAt: number;
   categoryName: string;
   categoryColor: string;
   note: string;
   onStop: () => void;
 }) {
-  const [pipWin, setPipWin] = useState<Window | null>(null);
-  const [now, setNow] = useState(Date.now());
   const supportsDocPiP = typeof window !== "undefined" && "documentPictureInPicture" in window;
+  const [open, setOpen] = useState<boolean>(() => {
+    try { return typeof window !== "undefined" && window.localStorage.getItem("floating_timer:open") === "1"; } catch { return false; }
+  });
 
   useEffect(() => {
-    if (!pipWin) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [pipWin]);
+    const refresh = () => {
+      try { setOpen(window.localStorage.getItem("floating_timer:open") === "1"); } catch {}
+    };
+    window.addEventListener("floating-timer:toggle", refresh);
+    window.addEventListener("storage", refresh);
+    const t = setInterval(refresh, 1500);
+    return () => {
+      window.removeEventListener("floating-timer:toggle", refresh);
+      window.removeEventListener("storage", refresh);
+      clearInterval(t);
+    };
+  }, []);
 
-  const open = async () => {
+  const toggle = () => {
     if (!supportsDocPiP) {
-      alert(
-        "O teu browser não suporta janela flutuante (Document Picture-in-Picture). Usa Chrome/Edge atualizados em desktop."
-      );
+      alert("O teu browser não suporta janela flutuante (Document Picture-in-Picture). Usa Chrome/Edge atualizados em desktop.");
       return;
     }
     try {
-      const w: Window = await (window as any).documentPictureInPicture.requestWindow({
-        width: 280,
-        height: 160,
-      });
-      // copy styles
-      [...document.styleSheets].forEach((sheet) => {
-        try {
-          const rules = [...sheet.cssRules].map((r) => r.cssText).join("\n");
-          const style = w.document.createElement("style");
-          style.textContent = rules;
-          w.document.head.appendChild(style);
-        } catch {
-          if (sheet.href) {
-            const link = w.document.createElement("link");
-            link.rel = "stylesheet";
-            link.href = sheet.href;
-            w.document.head.appendChild(link);
-          }
-        }
-      });
-      w.document.documentElement.classList.add(document.documentElement.classList.contains("dark") ? "dark" : "light");
-      w.document.title = "Cronómetro";
-      w.addEventListener("pagehide", () => setPipWin(null));
-      setPipWin(w);
-    } catch (err) {
-      console.error(err);
-    }
+      const next = !open;
+      if (next) window.localStorage.setItem("floating_timer:open", "1");
+      else window.localStorage.removeItem("floating_timer:open");
+      window.dispatchEvent(new Event("floating-timer:toggle"));
+      setOpen(next);
+    } catch {}
   };
-
-  const close = () => {
-    pipWin?.close();
-    setPipWin(null);
-  };
-
-  const elapsed = Math.floor((now - startedAt) / 1000);
 
   return (
-    <>
-      <button
-        onClick={pipWin ? close : open}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-input border border-border text-xs hover:border-primary/50"
-        title={supportsDocPiP ? "Janela flutuante" : "Não suportado neste browser"}
-      >
-        <PictureInPicture2 className="h-3.5 w-3.5" />
-        {pipWin ? "Fechar janela" : "Janela flutuante"}
-      </button>
-      {pipWin && createPortal(
-        <div
-          style={{
-            margin: 0,
-            height: "100vh",
-            display: "flex",
-            flexDirection: "column",
-            background: "hsl(var(--background))",
-            color: "hsl(var(--foreground))",
-            fontFamily: "ui-sans-serif, system-ui, sans-serif",
-            padding: "12px 14px",
-            gap: 8,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 999, background: categoryColor }} />
-            <span style={{ fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{categoryName}</span>
-          </div>
-          {note && (
-            <div style={{ fontSize: 11, opacity: 0.7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note}</div>
-          )}
-          <div style={{
-            fontSize: 38,
-            fontWeight: 700,
-            fontVariantNumeric: "tabular-nums",
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-            textAlign: "center",
-            lineHeight: 1.1,
-          }}>
-            {fmtDuration(elapsed)}
-          </div>
-          <button
-            onClick={() => { onStop(); close(); }}
-            style={{
-              marginTop: "auto",
-              padding: "8px 12px",
-              borderRadius: 10,
-              border: "none",
-              background: "hsl(var(--primary))",
-              color: "hsl(var(--primary-foreground))",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Parar
-          </button>
-        </div>,
-        pipWin.document.body,
-      )}
-    </>
+    <button
+      onClick={toggle}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-input border border-border text-xs hover:border-primary/50"
+      title={supportsDocPiP ? "Janela flutuante" : "Não suportado neste browser"}
+    >
+      <PictureInPicture2 className="h-3.5 w-3.5" />
+      {open ? "Fechar janela" : "Janela flutuante"}
+    </button>
   );
 }
+

@@ -504,17 +504,39 @@ function isDue(s: GlobalSchedule, now: Date): boolean {
   const interval =
     s.frequency === "daily" ? DAY :
     s.frequency === "weekly" ? 7 * DAY :
-    28 * DAY; // monthly ≈ 28d to guarantee at least one run per calendar month
-  if (!s.last) return true; // never ran → run now (past hour)
+    28 * DAY;
+  if (!s.last) return true;
   return now.getTime() - s.last >= interval;
 }
 
-// (combined export below replaces the old per-table loop)
+export function getNextAutoExportAt(s: GlobalSchedule = getGlobalSchedule()): number | null {
+  if (!s.enabled) return null;
+  const DAY = 24 * 60 * 60 * 1000;
+  const interval =
+    s.frequency === "daily" ? DAY :
+    s.frequency === "weekly" ? 7 * DAY :
+    28 * DAY;
+  const base = s.last || Date.now();
+  const next = new Date(base + interval);
+  next.setHours(s.hour, 0, 0, 0);
+  if (!s.last) {
+    const today = new Date();
+    today.setHours(s.hour, 0, 0, 0);
+    return today.getTime() > Date.now() ? today.getTime() : today.getTime() + interval;
+  }
+  return next.getTime();
+}
 
+const RESULT_KEY = "autoexport:lastresult:v1";
+export type AutoExportResult = { ok: boolean; at: number; filename?: string; error?: string; count?: number };
+export function getLastAutoExportResult(): AutoExportResult | null {
+  try { return JSON.parse(localStorage.getItem(RESULT_KEY) || "null"); } catch { return null; }
+}
+function setLastAutoExportResult(r: AutoExportResult) {
+  try { localStorage.setItem(RESULT_KEY, JSON.stringify(r)); } catch {}
+}
 
-// Builds a single combined JSON snapshot of every table. One download instead
-// of 7 — browsers throttle/block multiple programmatic downloads in a row,
-// which is why the previous loop appeared to "not work".
+// Builds a single combined JSON snapshot of every table.
 export async function exportAllCombined(opts?: { silent?: boolean }): Promise<string | null> {
   const sections: Record<string, unknown> = {};
   let total = 0;
@@ -531,7 +553,11 @@ export async function exportAllCombined(opts?: { silent?: boolean }): Promise<st
       (supabase as any).from("activity_rules").select("*").order("priority", { ascending: false }),
     ]);
     const firstErr = [n, l, ta, tr, tc, ts, ac, ap, ar].find((r) => r.error)?.error;
-    if (firstErr) { if (!opts?.silent) toast.error(firstErr.message); return null; }
+    if (firstErr) {
+      if (!opts?.silent) toast.error(firstErr.message);
+      setLastAutoExportResult({ ok: false, at: Date.now(), error: firstErr.message });
+      return null;
+    }
     sections.notes = n.data ?? [];
     sections.links = l.data ?? [];
     sections.tasks = ta.data ?? [];
@@ -549,30 +575,116 @@ export async function exportAllCombined(opts?: { silent?: boolean }): Promise<st
       (ac.data?.length ?? 0) + (ap.data?.length ?? 0) + (ar.data?.length ?? 0);
   } catch (e: any) {
     if (!opts?.silent) toast.error(e?.message ?? "Erro a exportar");
+    setLastAutoExportResult({ ok: false, at: Date.now(), error: e?.message ?? "Erro" });
     return null;
   }
   const filename = `${APP_NAME}-backup-${stamp()}.json`;
   downloadJson(filename, buildEnvelope("all", { sections }));
   if (!opts?.silent) toast.success(`Backup completo: ${total} item(s)`);
-  // Track in history under a synthetic key so the dashboard can show it
   try {
     const h = readHist();
     h.unshift({ table: "activity_setup" as Table, filename, at: Date.now(), count: total });
     writeHist(h);
-  } catch { /* ignore */ }
+  } catch {}
+  setLastAutoExportResult({ ok: true, at: Date.now(), filename, count: total });
   return filename;
+}
+
+// Import a combined backup JSON (produced by exportAllCombined) and route each
+// section to its proper importer. Categories/projects are deduped by name; rules
+// remap to new IDs; sessions upsert by (started_at,ended_at).
+export async function importAllCombined(userId: string): Promise<void> {
+  const parsed: any = await pickJsonFile();
+  if (!parsed) return;
+  if (!validateEnvelope(parsed, "all")) return;
+  const sections = parsed?.sections ?? parsed;
+  if (!sections || typeof sections !== "object") {
+    toast.error("Ficheiro não contém secções reconhecidas");
+    return;
+  }
+
+  const counts: Record<string, number> = {};
+  const errors: string[] = [];
+
+  const insertSimple = async (table: Table, items: any[]) => {
+    const allowed = ALLOWED_FIELDS[table];
+    if (!allowed?.length) return 0;
+    const rows = (items ?? [])
+      .map((it) => {
+        const row: Record<string, unknown> = { user_id: userId };
+        for (const k of allowed) if (it[k] !== undefined && it[k] !== null) row[k] = it[k];
+        return row;
+      })
+      .filter((r) => allowed.some((k) => r[k] !== undefined));
+    if (!rows.length) return 0;
+    const { error } = await (supabase as any).from(table).insert(rows);
+    if (error) { errors.push(`${table}: ${error.message}`); return 0; }
+    return rows.length;
+  };
+
+  try {
+    counts.notes = await insertSimple("notes", sections.notes ?? []);
+    counts.links = await insertSimple("links", sections.links ?? []);
+    counts.tasks = await insertSimple("tasks", sections.tasks ?? []);
+    counts.transactions = await insertSimple("transactions", sections.transactions ?? []);
+
+    // timer_categories (hierarchical) + sessions
+    let timerIdMap = new Map<string, string>();
+    if (Array.isArray(sections.timer_categories) && sections.timer_categories.length) {
+      const r = await importHierarchicalCategories("timer_categories", sections.timer_categories, userId);
+      timerIdMap = r.idMap;
+      counts.timer_categories = r.inserted;
+    }
+    if (Array.isArray(sections.timer_sessions) && sections.timer_sessions.length) {
+      const rows = sections.timer_sessions
+        .map((s: any) => ({
+          user_id: userId,
+          category_id: s.category_id ? (timerIdMap.get(String(s.category_id)) ?? s.category_id) : null,
+          note: s.note ?? null,
+          started_at: s.started_at,
+          ended_at: s.ended_at ?? null,
+          reminders_minutes: s.reminders_minutes ?? [],
+          paused_at: s.paused_at ?? null,
+          paused_ms: s.paused_ms ?? 0,
+        }))
+        .filter((s: any) => s.started_at && s.ended_at);
+      if (rows.length) {
+        const res = await replaceMatchingTimerSessions(rows, userId);
+        if (!res.ok) errors.push(`timer_sessions: ${res.error}`);
+        else counts.timer_sessions = res.inserted;
+      }
+    }
+
+    // activity_setup
+    if (sections.activity_setup) {
+      await importActivitySetup(userId, { ...sections.activity_setup, table: "activity_setup", schema_version: SCHEMA_VERSION, app: APP_NAME });
+      counts.activity_setup =
+        (sections.activity_setup.categories?.length ?? 0) +
+        (sections.activity_setup.projects?.length ?? 0) +
+        (sections.activity_setup.rules?.length ?? 0);
+    }
+
+    const total = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
+    if (errors.length) {
+      toast.warning(`Importado parcialmente (${total}). Erros: ${errors.slice(0, 2).join("; ")}`);
+    } else {
+      toast.success(`Importação concluída: ${total} item(s)`);
+    }
+  } catch (e: any) {
+    toast.error(e?.message ?? "Erro ao importar backup");
+  }
 }
 
 async function runGlobalAutoExport() {
   const sched = getGlobalSchedule();
   if (!isDue(sched, new Date())) return;
-  // Mark as run BEFORE the work so a failed download doesn't loop on every interval tick.
   setGlobalSchedule({ last: Date.now() });
   try {
     const ok = await exportAllCombined({ silent: true });
     if (ok) toast.success("Auto-exportação programada concluída");
-  } catch (e) {
+  } catch (e: any) {
     console.warn("global auto-export failed", e);
+    setLastAutoExportResult({ ok: false, at: Date.now(), error: e?.message ?? "Erro" });
   }
 }
 
