@@ -494,32 +494,92 @@ export function setGlobalSchedule(patch: Partial<GlobalSchedule>) {
   return next;
 }
 
+// Catch-up aware: fires whenever enough time has passed since `last` AND we're
+// past the configured hour today. This means missing the exact day/hour does
+// NOT skip the whole cycle — the export still runs next time the app opens.
 function isDue(s: GlobalSchedule, now: Date): boolean {
   if (!s.enabled) return false;
   if (now.getHours() < s.hour) return false;
-  const last = s.last ? new Date(s.last) : null;
-  const sameDay = last
-    && last.getFullYear() === now.getFullYear()
-    && last.getMonth() === now.getMonth()
-    && last.getDate() === now.getDate();
-  if (sameDay) return false;
-  if (s.frequency === "daily") return true;
-  if (s.frequency === "weekly") return now.getDay() === s.dayOfWeek;
-  if (s.frequency === "monthly") return now.getDate() === s.dayOfMonth;
-  return false;
+  const DAY = 24 * 60 * 60 * 1000;
+  const interval =
+    s.frequency === "daily" ? DAY :
+    s.frequency === "weekly" ? 7 * DAY :
+    28 * DAY; // monthly ≈ 28d to guarantee at least one run per calendar month
+  if (!s.last) return true; // never ran → run now (past hour)
+  return now.getTime() - s.last >= interval;
 }
 
 const ALL_TABLES: Table[] = ["notes", "links", "tasks", "transactions", "timer_categories", "timer_sessions", "activity_setup"];
 
+const ALL_TABLE_LABELS: Record<Table, string> = {
+  notes: "Notas",
+  links: "Links",
+  tasks: "Tarefas",
+  transactions: "Transações",
+  timer_categories: "Categorias do cronómetro",
+  timer_sessions: "Sessões do cronómetro",
+  activity_setup: "Activity (categorias, projetos, regras)",
+};
+
+// Builds a single combined JSON snapshot of every table. One download instead
+// of 7 — browsers throttle/block multiple programmatic downloads in a row,
+// which is why the previous loop appeared to "not work".
+export async function exportAllCombined(opts?: { silent?: boolean }): Promise<string | null> {
+  const sections: Record<string, unknown> = {};
+  let total = 0;
+  try {
+    const [n, l, ta, tr, tc, ts, ac, ap, ar] = await Promise.all([
+      supabase.from("notes").select("*").order("created_at", { ascending: false }),
+      supabase.from("links").select("*").order("created_at", { ascending: false }),
+      supabase.from("tasks").select("*").order("created_at", { ascending: false }),
+      supabase.from("transactions").select("*").order("created_at", { ascending: false }),
+      supabase.from("timer_categories").select("*").order("created_at", { ascending: true }),
+      supabase.from("timer_sessions").select("*").order("created_at", { ascending: false }),
+      (supabase as any).from("activity_categories").select("*").order("created_at", { ascending: true }),
+      (supabase as any).from("activity_projects").select("*").order("created_at", { ascending: true }),
+      (supabase as any).from("activity_rules").select("*").order("priority", { ascending: false }),
+    ]);
+    const firstErr = [n, l, ta, tr, tc, ts, ac, ap, ar].find((r) => r.error)?.error;
+    if (firstErr) { if (!opts?.silent) toast.error(firstErr.message); return null; }
+    sections.notes = n.data ?? [];
+    sections.links = l.data ?? [];
+    sections.tasks = ta.data ?? [];
+    sections.transactions = tr.data ?? [];
+    sections.timer_categories = tc.data ?? [];
+    sections.timer_sessions = ts.data ?? [];
+    sections.activity_setup = {
+      categories: ac.data ?? [],
+      projects: ap.data ?? [],
+      rules: ar.data ?? [],
+    };
+    total =
+      (n.data?.length ?? 0) + (l.data?.length ?? 0) + (ta.data?.length ?? 0) +
+      (tr.data?.length ?? 0) + (tc.data?.length ?? 0) + (ts.data?.length ?? 0) +
+      (ac.data?.length ?? 0) + (ap.data?.length ?? 0) + (ar.data?.length ?? 0);
+  } catch (e: any) {
+    if (!opts?.silent) toast.error(e?.message ?? "Erro a exportar");
+    return null;
+  }
+  const filename = `${APP_NAME}-backup-${stamp()}.json`;
+  downloadJson(filename, buildEnvelope("all", { sections }));
+  if (!opts?.silent) toast.success(`Backup completo: ${total} item(s)`);
+  // Track in history under a synthetic key so the dashboard can show it
+  try {
+    const h = readHist();
+    h.unshift({ table: "activity_setup" as Table, filename, at: Date.now(), count: total });
+    writeHist(h);
+  } catch { /* ignore */ }
+  return filename;
+}
+
 async function runGlobalAutoExport() {
   const sched = getGlobalSchedule();
   if (!isDue(sched, new Date())) return;
+  // Mark as run BEFORE the work so a failed download doesn't loop on every interval tick.
+  setGlobalSchedule({ last: Date.now() });
   try {
-    for (const t of ALL_TABLES) {
-      await exportTable(t, { silent: true });
-    }
-    setGlobalSchedule({ last: Date.now() });
-    toast.success("Auto-exportação programada concluída");
+    const ok = await exportAllCombined({ silent: true });
+    if (ok) toast.success("Auto-exportação programada concluída");
   } catch (e) {
     console.warn("global auto-export failed", e);
   }
