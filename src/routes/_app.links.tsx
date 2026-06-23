@@ -307,6 +307,19 @@ function LinksPage() {
           onChanged={load}
         />
       )}
+
+      {user && (
+        <DangerZone
+          title="Apagar todos os links"
+          description="Remove permanentemente todos os links guardados (incluindo favoritos e tags)."
+          confirmText="APAGAR LINKS"
+          onConfirm={async () => {
+            const n = await deleteAllForUser(supabase, user.id, ["links"]);
+            await load();
+            return { count: n };
+          }}
+        />
+      )}
     </div>
   );
 }
