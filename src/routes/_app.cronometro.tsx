@@ -15,6 +15,7 @@ import { DangerZone, deleteAllForUser } from "@/components/danger-zone";
 import { useAuth } from "@/lib/auth";
 import { useNativeTimerMirror } from "@/lib/native-timer-mirror";
 import { buildEnvelope, downloadJson, importHierarchicalCategories, pickJsonFile, validateEnvelope } from "@/lib/data-io";
+import { openFloatingTimer, closeFloatingTimer, isFloatingTimerOpen } from "@/components/floating-timer-host";
 import { toast } from "sonner";
 import {
   Table,
@@ -483,10 +484,13 @@ function CronometroPage() {
       ? {
           active: true,
           sessionId: activeDb.id,
+          categoryId: activeDb.category_id ?? "",
           categoryName: activeCat?.name ?? "—",
           categoryColor: activeCat?.color ?? "#888",
           note: activeDb.note ?? "",
-          startedAt: activeStartedAt + activePausedMs + (activePausedAt ? Date.now() - activePausedAt : 0),
+          startedAt: activeStartedAt,
+          pausedAt: activePausedAt || null,
+          pausedMs: activePausedMs,
           reminders: activeDb.reminders_minutes ?? [],
         }
       : { active: false },
@@ -1688,35 +1692,25 @@ function FloatingWindowButton(_: {
 }) {
   const supportsDocPiP = typeof window !== "undefined" && "documentPictureInPicture" in window;
   const [open, setOpen] = useState<boolean>(() => {
-    try { return typeof window !== "undefined" && window.localStorage.getItem("floating_timer:open") === "1"; } catch { return false; }
+    try { return isFloatingTimerOpenSafe(); } catch { return false; }
   });
 
   useEffect(() => {
     const refresh = () => {
-      try { setOpen(window.localStorage.getItem("floating_timer:open") === "1"); } catch {}
+      try { setOpen(isFloatingTimerOpenSafe()); } catch {}
     };
-    window.addEventListener("floating-timer:toggle", refresh);
-    window.addEventListener("storage", refresh);
-    const t = setInterval(refresh, 1500);
-    return () => {
-      window.removeEventListener("floating-timer:toggle", refresh);
-      window.removeEventListener("storage", refresh);
-      clearInterval(t);
-    };
+    const t = setInterval(refresh, 800);
+    return () => clearInterval(t);
   }, []);
 
-  const toggle = () => {
-    if (!supportsDocPiP) {
-      alert("O teu browser não suporta janela flutuante (Document Picture-in-Picture). Usa Chrome/Edge atualizados em desktop.");
-      return;
+  const toggle = async () => {
+    if (open) {
+      closeFloatingTimer();
+      setOpen(false);
+    } else {
+      const ok = await openFloatingTimer();
+      setOpen(ok);
     }
-    try {
-      const next = !open;
-      if (next) window.localStorage.setItem("floating_timer:open", "1");
-      else window.localStorage.removeItem("floating_timer:open");
-      window.dispatchEvent(new Event("floating-timer:toggle"));
-      setOpen(next);
-    } catch {}
   };
 
   return (
@@ -1730,4 +1724,9 @@ function FloatingWindowButton(_: {
     </button>
   );
 }
+
+function isFloatingTimerOpenSafe() {
+  return isFloatingTimerOpen();
+}
+
 
