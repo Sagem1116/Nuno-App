@@ -111,7 +111,8 @@ export type Table =
   | "tasks"
   | "timer_categories"
   | "timer_sessions"
-  | "activity_setup";
+  | "activity_setup"
+  | "trips";
 
 export type ImportTable = Table | "activity_logs";
 
