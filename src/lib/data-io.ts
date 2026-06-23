@@ -757,83 +757,102 @@ export async function importAllCombined(userId: string): Promise<void> {
     return;
   }
 
-  const counts: Record<string, number> = {};
-  const errors: string[] = [];
+  // Build the step plan upfront so the progress bar has a real total.
+  type StepDef = { label: string; run: () => Promise<{ inserted: number; skipped: number; updated: number; errors: number }> };
+  const steps: StepDef[] = [];
 
-  const insertSimple = async (table: Table, items: any[]) => {
-    const allowed = ALLOWED_FIELDS[table];
-    if (!allowed?.length) return 0;
-    const rows = (items ?? [])
-      .map((it) => {
-        const row: Record<string, unknown> = { user_id: userId };
-        for (const k of allowed) if (it[k] !== undefined && it[k] !== null) row[k] = it[k];
-        return row;
-      })
-      .filter((r) => allowed.some((k) => r[k] !== undefined));
-    if (!rows.length) return 0;
-    const { rows: toInsert } = await filterExistingRows(table, rows, userId);
-    if (!toInsert.length) return 0;
-    const { error } = await (supabase as any).from(table).insert(toInsert);
-    if (error) { errors.push(`${table}: ${error.message}`); return 0; }
-    return toInsert.length;
-  };
+  const mkSimpleStep = (table: Table, label: string, items: any[]): StepDef => ({
+    label,
+    run: async () => {
+      const allowed = ALLOWED_FIELDS[table];
+      const rows = (items ?? [])
+        .map((it) => {
+          const row: Record<string, unknown> = { user_id: userId };
+          for (const k of allowed) if (it[k] !== undefined && it[k] !== null) row[k] = it[k];
+          return row;
+        })
+        .filter((r) => allowed.some((k) => r[k] !== undefined));
+      if (!rows.length) return { inserted: 0, skipped: 0, updated: 0, errors: 0 };
+      return processTableInsert(table, rows, userId);
+    },
+  });
 
-  try {
-    counts.notes = await insertSimple("notes", sections.notes ?? []);
-    counts.links = await insertSimple("links", sections.links ?? []);
-    counts.tasks = await insertSimple("tasks", sections.tasks ?? []);
-    counts.transactions = await insertSimple("transactions", sections.transactions ?? []);
+  if (Array.isArray(sections.notes)) steps.push(mkSimpleStep("notes", "Notas", sections.notes));
+  if (Array.isArray(sections.links)) steps.push(mkSimpleStep("links", "Links", sections.links));
+  if (Array.isArray(sections.tasks)) steps.push(mkSimpleStep("tasks", "Tarefas", sections.tasks));
+  if (Array.isArray(sections.transactions)) steps.push(mkSimpleStep("transactions", "Transações", sections.transactions));
 
-    // timer_categories (hierarchical) + sessions
-    let timerIdMap = new Map<string, string>();
-    if (Array.isArray(sections.timer_categories) && sections.timer_categories.length) {
-      const r = await importHierarchicalCategories("timer_categories", sections.timer_categories, userId);
-      timerIdMap = r.idMap;
-      counts.timer_categories = r.inserted;
-    }
-    if (Array.isArray(sections.timer_sessions) && sections.timer_sessions.length) {
-      const rows = sections.timer_sessions
-        .map((s: any) => ({
-          user_id: userId,
-          category_id: s.category_id ? (timerIdMap.get(String(s.category_id)) ?? s.category_id) : null,
-          note: s.note ?? null,
-          started_at: s.started_at,
-          ended_at: s.ended_at ?? null,
-          reminders_minutes: s.reminders_minutes ?? [],
-          paused_at: s.paused_at ?? null,
-          paused_ms: s.paused_ms ?? 0,
-        }))
-        .filter((s: any) => s.started_at && s.ended_at);
-      if (rows.length) {
+  let timerIdMap = new Map<string, string>();
+  if (Array.isArray(sections.timer_categories) && sections.timer_categories.length) {
+    steps.push({
+      label: "Categorias do cronómetro",
+      run: async () => {
+        const r = await importHierarchicalCategories("timer_categories", sections.timer_categories, userId);
+        timerIdMap = r.idMap;
+        return { inserted: r.inserted, skipped: r.reused + r.skipped, updated: 0, errors: 0 };
+      },
+    });
+  }
+  if (Array.isArray(sections.timer_sessions) && sections.timer_sessions.length) {
+    steps.push({
+      label: "Sessões do cronómetro",
+      run: async () => {
+        const rows = sections.timer_sessions
+          .map((s: any) => ({
+            user_id: userId,
+            category_id: s.category_id ? (timerIdMap.get(String(s.category_id)) ?? s.category_id) : null,
+            note: s.note ?? null,
+            started_at: s.started_at,
+            ended_at: s.ended_at ?? null,
+            reminders_minutes: s.reminders_minutes ?? [],
+            paused_at: s.paused_at ?? null,
+            paused_ms: s.paused_ms ?? 0,
+          }))
+          .filter((s: any) => s.started_at && s.ended_at);
+        if (!rows.length) return { inserted: 0, skipped: 0, updated: 0, errors: 0 };
         const res = await replaceMatchingTimerSessions(rows, userId);
-        if (!res.ok) errors.push(`timer_sessions: ${res.error}`);
-        else counts.timer_sessions = res.inserted;
-      }
-    }
+        if (!res.ok) return { inserted: 0, skipped: 0, updated: 0, errors: 1 };
+        return { inserted: res.inserted, skipped: 0, updated: res.replaced, errors: 0 };
+      },
+    });
+  }
 
-    // activity_setup
-    if (sections.activity_setup) {
-      await importActivitySetup(userId, { ...sections.activity_setup, table: "activity_setup", schema_version: SCHEMA_VERSION, app: APP_NAME });
-      counts.activity_setup =
-        (sections.activity_setup.categories?.length ?? 0) +
-        (sections.activity_setup.projects?.length ?? 0) +
-        (sections.activity_setup.rules?.length ?? 0);
-    }
+  if (sections.activity_setup) {
+    steps.push({
+      label: "Activity",
+      run: async () => {
+        const s = await importActivitySetup(
+          userId,
+          { ...sections.activity_setup, table: "activity_setup", schema_version: SCHEMA_VERSION, app: APP_NAME },
+          { silent: true },
+        );
+        return { inserted: s.inserted, skipped: s.skipped, updated: 0, errors: s.errors };
+      },
+    });
+  }
 
-    if (Array.isArray(sections.trips) && sections.trips.length) {
-      const r = await insertTripBundles(userId, sections.trips);
-      counts.trips = r.inserted;
-      if (r.errors.length) errors.push(`trips: ${r.errors.slice(0, 2).join("; ")}`);
-    }
+  if (Array.isArray(sections.trips) && sections.trips.length) {
+    steps.push({
+      label: "Viagens",
+      run: async () => {
+        const r = await insertTripBundles(userId, sections.trips);
+        return { inserted: r.inserted, skipped: r.skipped, updated: 0, errors: r.errors.length };
+      },
+    });
+  }
 
-    const total = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
-    if (errors.length) {
-      toast.warning(`Importado parcialmente (${total}). Erros: ${errors.slice(0, 2).join("; ")}`);
-    } else {
-      toast.success(`Importação concluída: ${total} item(s)`);
+  importProgress.start("A importar backup", steps.length || 1);
+  let totalErrors = 0;
+  try {
+    for (const step of steps) {
+      importProgress.setLabel(step.label);
+      const s = await step.run();
+      totalErrors += s.errors;
+      importProgress.completeStep({ label: step.label, ...s });
     }
+    importProgress.finish(totalErrors ? `${totalErrors} erro(s) durante a importação` : null);
   } catch (e: any) {
-    toast.error(e?.message ?? "Erro ao importar backup");
+    importProgress.finish(e?.message ?? "Erro ao importar backup");
   }
 }
 
