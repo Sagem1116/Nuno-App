@@ -815,9 +815,7 @@ function BackupsPanel({ userId }: { userId: string | undefined }) {
   const exportAll = async () => {
     setBusy(true);
     try {
-      for (const { table } of BACKUP_TABLES) {
-        await exportTable(table, { silent: true });
-      }
+      await exportAllCombined();
     } finally {
       setBusy(false);
     }
