@@ -545,6 +545,105 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_preferences: {
+        Row: {
+          created_at: string
+          daily_enabled: boolean
+          daily_hour: number
+          enabled: boolean
+          priority_high_only: boolean
+          start_lead_minutes: number
+          task_end_enabled: boolean
+          task_start_enabled: boolean
+          tasks_enabled: boolean
+          tasks_window_hours: number
+          timezone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_enabled?: boolean
+          daily_hour?: number
+          enabled?: boolean
+          priority_high_only?: boolean
+          start_lead_minutes?: number
+          task_end_enabled?: boolean
+          task_start_enabled?: boolean
+          tasks_enabled?: boolean
+          tasks_window_hours?: number
+          timezone?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_enabled?: boolean
+          daily_hour?: number
+          enabled?: boolean
+          priority_high_only?: boolean
+          start_lead_minutes?: number
+          task_end_enabled?: boolean
+          task_start_enabled?: boolean
+          tasks_enabled?: boolean
+          tasks_window_hours?: number
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      push_sent_log: {
+        Row: {
+          id: string
+          key: string
+          sent_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          key: string
+          sent_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          sent_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          created_at: string
+          fcm_token: string
+          id: string
+          last_seen: string
+          platform: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          fcm_token: string
+          id?: string
+          last_seen?: string
+          platform?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          fcm_token?: string
+          id?: string
+          last_seen?: string
+          platform?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       reservations: {
         Row: {
           confirmation_number: string | null
