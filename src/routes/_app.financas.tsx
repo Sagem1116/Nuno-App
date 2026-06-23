@@ -149,13 +149,20 @@ function FinancasPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
+    const fromTs = fromDate ? new Date(fromDate + "T00:00:00").getTime() : null;
+    const toTs = toDate ? new Date(toDate + "T23:59:59.999").getTime() : null;
     return txs.filter((t) => {
       if (filterType !== "all" && t.type !== filterType) return false;
       if (filterCat !== "all" && t.category !== filterCat) return false;
+      if (fromTs != null || toTs != null) {
+        const ts = new Date(t.occurred_at).getTime();
+        if (fromTs != null && ts < fromTs) return false;
+        if (toTs != null && ts > toTs) return false;
+      }
       if (!q) return true;
       return t.description.toLowerCase().includes(q) || t.category.toLowerCase().includes(q);
     });
-  }, [txs, search, filterType, filterCat]);
+  }, [txs, search, filterType, filterCat, fromDate, toDate]);
 
   const remove = async (id: string) => {
     if (!confirm("Eliminar transação?")) return;
