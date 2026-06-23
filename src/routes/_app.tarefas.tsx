@@ -271,6 +271,18 @@ function TasksPage() {
           </div>
         </div>
       )}
+      {user && (
+        <DangerZone
+          title="Apagar todas as tarefas"
+          description="Remove permanentemente todas as tarefas (pendentes e concluídas)."
+          confirmText="APAGAR TAREFAS"
+          onConfirm={async () => {
+            const n = await deleteAllForUser(supabase, user.id, ["tasks"]);
+            await load();
+            return { count: n };
+          }}
+        />
+      )}
     </div>
   );
 }
