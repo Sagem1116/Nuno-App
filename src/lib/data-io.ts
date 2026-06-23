@@ -207,28 +207,80 @@ const DEDUP_KEYS: Partial<Record<Table, { fields: string[]; key: DedupKeyFn }>> 
   tasks:        { fields: ["title", "due_date", "status"],                        key: (r) => `${_norm(r.title)}|${_ts(r.due_date)}|${_norm(r.status)}` },
 };
 
+type ExistingRow = Record<string, unknown> & { id?: string };
+type DedupResult = {
+  rows: Record<string, unknown>[];
+  skipped: number;
+  conflicts: ConflictRow[];
+};
+
 async function filterExistingRows(
   table: Table,
   rows: Record<string, unknown>[],
   userId: string,
-): Promise<{ rows: Record<string, unknown>[]; skipped: number }> {
+): Promise<DedupResult> {
   const cfg = DEDUP_KEYS[table];
-  if (!cfg) return { rows, skipped: 0 };
+  if (!cfg) return { rows, skipped: 0, conflicts: [] };
+  const compareFields = (ALLOWED_FIELDS[table] ?? []).filter((f) => !cfg.fields.includes(f));
+  const selectCols = ["id", ...cfg.fields, ...compareFields].join(",");
   const { data: existing, error } = await (supabase as any)
     .from(table)
-    .select(cfg.fields.join(","))
+    .select(selectCols)
     .eq("user_id", userId);
-  if (error) return { rows, skipped: 0 };
-  const seen = new Set<string>((existing ?? []).map((r: any) => cfg.key(r)));
+  if (error) return { rows, skipped: 0, conflicts: [] };
+  const byKey = new Map<string, ExistingRow>();
+  for (const e of (existing ?? []) as ExistingRow[]) byKey.set(cfg.key(e), e);
+
   const out: Record<string, unknown>[] = [];
+  const conflicts: ConflictRow[] = [];
   let skipped = 0;
+  const seenIncoming = new Set<string>();
   for (const r of rows) {
     const k = cfg.key(r);
-    if (seen.has(k)) { skipped += 1; continue; }
-    seen.add(k);
-    out.push(r);
+    if (seenIncoming.has(k)) { skipped += 1; continue; }
+    seenIncoming.add(k);
+    const ex = byKey.get(k);
+    if (!ex) { out.push(r); continue; }
+    // Match by natural key — check if other fields differ
+    const diffs: ConflictRow["diffs"] = [];
+    for (const f of compareFields) {
+      const a = ex[f];
+      const b = r[f];
+      if (_norm(JSON.stringify(a ?? null)) !== _norm(JSON.stringify(b ?? null))) {
+        diffs.push({ field: f, existing: a, incoming: b });
+      }
+    }
+    if (!diffs.length) { skipped += 1; continue; }
+    conflicts.push({
+      table,
+      label: String(r.title ?? r.name ?? r.url ?? r.description ?? "(sem título)"),
+      diffs,
+      existingId: String(ex.id ?? ""),
+      incoming: r,
+    });
   }
-  return { rows: out, skipped };
+  return { rows: out, skipped, conflicts };
+}
+
+// Resolves conflicts via modal, applies "update" decisions, and returns counts.
+async function resolveAndApplyConflicts(
+  table: Table,
+  conflicts: ConflictRow[],
+): Promise<{ updated: number; keptAsSkipped: number; errors: number }> {
+  if (!conflicts.length) return { updated: 0, keptAsSkipped: 0, errors: 0 };
+  const decisions = await askConflictResolution(conflicts);
+  let updated = 0;
+  let keptAsSkipped = 0;
+  let errors = 0;
+  for (let i = 0; i < conflicts.length; i++) {
+    if (decisions[i] !== "update") { keptAsSkipped += 1; continue; }
+    const c = conflicts[i];
+    const patch: Record<string, unknown> = {};
+    for (const d of c.diffs) patch[d.field] = c.incoming[d.field] ?? null;
+    const { error } = await (supabase as any).from(table).update(patch).eq("id", c.existingId);
+    if (error) errors += 1; else updated += 1;
+  }
+  return { updated, keptAsSkipped, errors };
 }
 
 type TimerSessionImportResult =
