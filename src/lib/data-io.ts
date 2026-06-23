@@ -1064,7 +1064,11 @@ async function insertTripBundles(userId: string, raw: any[]): Promise<{ inserted
   return { inserted, skipped, errors };
 }
 
-async function importTripsFromParsed(userId: string, parsed: any): Promise<void> {
+async function importTripsFromParsed(
+  userId: string,
+  parsed: any,
+  opts?: { silent?: boolean },
+): Promise<{ inserted: number; skipped: number; errors: string[] }> {
   const list: any[] = Array.isArray(parsed?.trips)
     ? parsed.trips
     : parsed?.bundle
@@ -1072,12 +1076,18 @@ async function importTripsFromParsed(userId: string, parsed: any): Promise<void>
       : Array.isArray(parsed)
         ? parsed
         : [];
-  if (!list.length) { toast.error("Sem viagens reconhecidas no ficheiro"); return; }
+  if (!list.length) {
+    if (!opts?.silent) toast.error("Sem viagens reconhecidas no ficheiro");
+    return { inserted: 0, skipped: 0, errors: [] };
+  }
   const r = await insertTripBundles(userId, list);
-  if (r.inserted) toast.success(`${r.inserted} viagem(ns) importada(s)${r.skipped ? ` · ${r.skipped} já existiam` : ""}`);
-  else if (r.skipped) toast.info(`Nada para importar — ${r.skipped} viagem(ns) já existiam`);
-  if (r.errors.length) toast.warning(`Erros: ${r.errors.slice(0, 2).join("; ")}`);
-  if (!r.inserted && !r.errors.length && !r.skipped) toast.error("Nenhuma viagem importada");
+  if (!opts?.silent) {
+    if (r.inserted) toast.success(`${r.inserted} viagem(ns) importada(s)${r.skipped ? ` · ${r.skipped} já existiam` : ""}`);
+    else if (r.skipped) toast.info(`Nada para importar — ${r.skipped} viagem(ns) já existiam`);
+    if (r.errors.length) toast.warning(`Erros: ${r.errors.slice(0, 2).join("; ")}`);
+    if (!r.inserted && !r.errors.length && !r.skipped) toast.error("Nenhuma viagem importada");
+  }
+  return r;
 }
 
 
