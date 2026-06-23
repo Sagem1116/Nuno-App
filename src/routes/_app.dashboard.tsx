@@ -8,7 +8,7 @@ import { format, isToday, isPast, parseISO, differenceInCalendarDays, isValid, i
 import { pt } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { exportData, exportTable, importTable, getGlobalSchedule, setGlobalSchedule, type Table as DataTable, type Frequency } from "@/lib/data-io";
+import { exportData, exportTable, exportAllCombined, importTable, getGlobalSchedule, setGlobalSchedule, type Table as DataTable, type Frequency } from "@/lib/data-io";
 import { AutoExportMenu } from "@/components/auto-export-menu";
 import { NotificationsSettings } from "@/components/notifications-settings";
 import { NotepadViewer } from "@/components/notepad-viewer";
@@ -815,9 +815,7 @@ function BackupsPanel({ userId }: { userId: string | undefined }) {
   const exportAll = async () => {
     setBusy(true);
     try {
-      for (const { table } of BACKUP_TABLES) {
-        await exportTable(table, { silent: true });
-      }
+      await exportAllCombined();
     } finally {
       setBusy(false);
     }
@@ -850,7 +848,7 @@ function BackupsPanel({ userId }: { userId: string | undefined }) {
               <Download className="h-3.5 w-3.5" /> {busy ? "A exportar..." : "Exportar tudo (JSON)"}
             </button>
             <span className="text-[11px] text-muted-foreground">
-              Descarrega um JSON por cada secção: notas, links, tarefas, transações, cronómetro e Activity.
+              Descarrega um único ficheiro JSON com todas as secções (notas, links, tarefas, transações, cronómetro e Activity).
             </span>
           </div>
 
