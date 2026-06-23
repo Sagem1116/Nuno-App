@@ -15,6 +15,7 @@ import { DangerZone, deleteAllForUser } from "@/components/danger-zone";
 import { useAuth } from "@/lib/auth";
 import { useNativeTimerMirror } from "@/lib/native-timer-mirror";
 import { buildEnvelope, downloadJson, importHierarchicalCategories, pickJsonFile, validateEnvelope } from "@/lib/data-io";
+import { openFloatingTimer, closeFloatingTimer, isFloatingTimerOpen } from "@/components/floating-timer-host";
 import { toast } from "sonner";
 import {
   Table,
