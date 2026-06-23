@@ -511,15 +511,6 @@ function isDue(s: GlobalSchedule, now: Date): boolean {
 
 // (combined export below replaces the old per-table loop)
 
-const ALL_TABLE_LABELS: Record<Table, string> = {
-  notes: "Notas",
-  links: "Links",
-  tasks: "Tarefas",
-  transactions: "Transações",
-  timer_categories: "Categorias do cronómetro",
-  timer_sessions: "Sessões do cronómetro",
-  activity_setup: "Activity (categorias, projetos, regras)",
-};
 
 // Builds a single combined JSON snapshot of every table. One download instead
 // of 7 — browsers throttle/block multiple programmatic downloads in a row,
