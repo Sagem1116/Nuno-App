@@ -674,6 +674,12 @@ export async function importAllCombined(userId: string): Promise<void> {
         (sections.activity_setup.rules?.length ?? 0);
     }
 
+    if (Array.isArray(sections.trips) && sections.trips.length) {
+      const r = await insertTripBundles(userId, sections.trips);
+      counts.trips = r.inserted;
+      if (r.errors.length) errors.push(`trips: ${r.errors.slice(0, 2).join("; ")}`);
+    }
+
     const total = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
     if (errors.length) {
       toast.warning(`Importado parcialmente (${total}). Erros: ${errors.slice(0, 2).join("; ")}`);
