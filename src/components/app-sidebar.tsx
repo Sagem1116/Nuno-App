@@ -83,7 +83,7 @@ export function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
           )}
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="app-scroll flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {items.map((item) => {
             const active = pathname === item.url || pathname.startsWith(item.url + "/");
             return (

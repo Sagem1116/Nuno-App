@@ -329,3 +329,26 @@
 @utility page-enter {
   animation: fade-up 0.35s ease-out;
 }
+
+/* Slim, themed scrollbar for in-app scrollable regions (sidebar nav, dropdowns) */
+@utility app-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--primary) 45%, transparent) transparent;
+  scrollbar-gutter: stable;
+  &::-webkit-scrollbar { width: 8px; height: 8px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--primary) 35%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 0.2s ease;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--primary) 65%, transparent);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+  }
+  &::-webkit-scrollbar-corner { background: transparent; }
+}
+

@@ -177,9 +177,57 @@ export async function importTable(table: Table, userId: string) {
     toast.success(`${result.inserted} sessão(ões) importada(s)${result.replaced ? ` · ${result.replaced} substituída(s)` : ""}`);
     return;
   }
-  const { error } = await supabase.from(table).insert(rows as any);
+  const { rows: toInsert, skipped } = await filterExistingRows(table, rows, userId);
+  if (!toInsert.length) {
+    toast.info(`Nada para importar — ${skipped} item(s) já existiam`);
+    return;
+  }
+  const { error } = await supabase.from(table).insert(toInsert as any);
   if (error) { toast.error(error.message); return; }
-  toast.success(`${rows.length} item(s) importados`);
+  toast.success(`${toInsert.length} item(s) importados${skipped ? ` · ${skipped} já existiam` : ""}`);
+}
+
+// ---------- Deduplication on import ----------
+//
+// To avoid creating duplicates when re-importing a backup, each table defines a
+// stable "natural key" from a small subset of fields. Rows whose key matches an
+// existing row for the same user are skipped on insert.
+type DedupKeyFn = (row: Record<string, unknown>) => string;
+const _norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
+const _ts = (v: unknown) => {
+  const ms = Date.parse(String(v ?? ""));
+  return Number.isFinite(ms) ? String(Math.round(ms / 60000)) : _norm(v);
+};
+const DEDUP_KEYS: Partial<Record<Table, { fields: string[]; key: DedupKeyFn }>> = {
+  notes:        { fields: ["title", "content"],                                   key: (r) => `${_norm(r.title)}|${_norm(r.content)}` },
+  links:        { fields: ["url", "title"],                                       key: (r) => `${_norm(r.url)}|${_norm(r.title)}` },
+  transactions: { fields: ["amount", "type", "category", "occurred_at", "description"],
+                  key: (r) => `${_norm(r.amount)}|${_norm(r.type)}|${_norm(r.category)}|${_ts(r.occurred_at)}|${_norm(r.description)}` },
+  tasks:        { fields: ["title", "due_date", "status"],                        key: (r) => `${_norm(r.title)}|${_ts(r.due_date)}|${_norm(r.status)}` },
+};
+
+async function filterExistingRows(
+  table: Table,
+  rows: Record<string, unknown>[],
+  userId: string,
+): Promise<{ rows: Record<string, unknown>[]; skipped: number }> {
+  const cfg = DEDUP_KEYS[table];
+  if (!cfg) return { rows, skipped: 0 };
+  const { data: existing, error } = await (supabase as any)
+    .from(table)
+    .select(cfg.fields.join(","))
+    .eq("user_id", userId);
+  if (error) return { rows, skipped: 0 };
+  const seen = new Set<string>((existing ?? []).map((r: any) => cfg.key(r)));
+  const out: Record<string, unknown>[] = [];
+  let skipped = 0;
+  for (const r of rows) {
+    const k = cfg.key(r);
+    if (seen.has(k)) { skipped += 1; continue; }
+    seen.add(k);
+    out.push(r);
+  }
+  return { rows: out, skipped };
 }
 
 type TimerSessionImportResult =
@@ -627,9 +675,11 @@ export async function importAllCombined(userId: string): Promise<void> {
       })
       .filter((r) => allowed.some((k) => r[k] !== undefined));
     if (!rows.length) return 0;
-    const { error } = await (supabase as any).from(table).insert(rows);
+    const { rows: toInsert } = await filterExistingRows(table, rows, userId);
+    if (!toInsert.length) return 0;
+    const { error } = await (supabase as any).from(table).insert(toInsert);
     if (error) { errors.push(`${table}: ${error.message}`); return 0; }
-    return rows.length;
+    return toInsert.length;
   };
 
   try {
@@ -817,9 +867,15 @@ export async function exportAllTrips(opts?: { silent?: boolean }): Promise<strin
 // Insert one trip bundle into the target account. New ids are generated for
 // trip / day / itinerary_item / attachment so the import is non-destructive
 // (running twice creates duplicates). Public sharing fields are stripped.
-async function insertTripBundle(userId: string, bundle: any): Promise<{ ok: boolean; error?: string; tripId?: string }> {
+async function insertTripBundle(userId: string, bundle: any): Promise<{ ok: boolean; error?: string; tripId?: string; skipped?: boolean }> {
   if (!bundle?.trip) return { ok: false, error: "Sem dados de viagem" };
   const { id: _oldId, user_id: _u, created_at: _c, updated_at: _up, public_slug: _ps, is_public: _ip, ...tripRest } = bundle.trip;
+  // Skip if a trip with the same name + dates already exists for this user.
+  const tripKey = `${_norm(tripRest.name)}|${_ts(tripRest.start_date)}|${_ts(tripRest.end_date)}`;
+  const { data: existingTrips } = await (supabase as any)
+    .from("trips").select("name,start_date,end_date").eq("user_id", userId);
+  const seen = new Set<string>((existingTrips ?? []).map((t: any) => `${_norm(t.name)}|${_ts(t.start_date)}|${_ts(t.end_date)}`));
+  if (seen.has(tripKey)) return { ok: true, skipped: true };
   const { data: newTrip, error: tErr } = await (supabase as any).from("trips").insert({ ...tripRest, user_id: userId, public_slug: null, is_public: false }).select("id").single();
   if (tErr || !newTrip) return { ok: false, error: tErr?.message ?? "Falha ao criar viagem" };
   const newTripId = newTrip.id as string;
@@ -899,20 +955,20 @@ async function insertTripBundle(userId: string, bundle: any): Promise<{ ok: bool
   return { ok: true, tripId: newTripId };
 }
 
-async function insertTripBundles(userId: string, raw: any[]): Promise<{ inserted: number; errors: string[] }> {
+async function insertTripBundles(userId: string, raw: any[]): Promise<{ inserted: number; skipped: number; errors: string[] }> {
   let inserted = 0;
+  let skipped = 0;
   const errors: string[] = [];
   for (const b of raw) {
     const r = await insertTripBundle(userId, b);
-    if (r.ok) inserted += 1;
+    if (r.skipped) skipped += 1;
+    else if (r.ok) inserted += 1;
     else if (r.error) errors.push(r.error);
   }
-  return { inserted, errors };
+  return { inserted, skipped, errors };
 }
 
 async function importTripsFromParsed(userId: string, parsed: any): Promise<void> {
-  // Accept either a single trip envelope ({bundle}), a multi-trip envelope
-  // ({trips: [bundle, ...]}), or a bare array of bundles.
   const list: any[] = Array.isArray(parsed?.trips)
     ? parsed.trips
     : parsed?.bundle
@@ -922,10 +978,12 @@ async function importTripsFromParsed(userId: string, parsed: any): Promise<void>
         : [];
   if (!list.length) { toast.error("Sem viagens reconhecidas no ficheiro"); return; }
   const r = await insertTripBundles(userId, list);
-  if (r.inserted) toast.success(`${r.inserted} viagem(ns) importada(s)`);
+  if (r.inserted) toast.success(`${r.inserted} viagem(ns) importada(s)${r.skipped ? ` · ${r.skipped} já existiam` : ""}`);
+  else if (r.skipped) toast.info(`Nada para importar — ${r.skipped} viagem(ns) já existiam`);
   if (r.errors.length) toast.warning(`Erros: ${r.errors.slice(0, 2).join("; ")}`);
-  if (!r.inserted && !r.errors.length) toast.error("Nenhuma viagem importada");
+  if (!r.inserted && !r.errors.length && !r.skipped) toast.error("Nenhuma viagem importada");
 }
+
 
 export async function importTripsFromFile(userId: string): Promise<void> {
   const parsed = await pickJsonFile();
