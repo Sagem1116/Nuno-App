@@ -509,7 +509,7 @@ function isDue(s: GlobalSchedule, now: Date): boolean {
   return now.getTime() - s.last >= interval;
 }
 
-const ALL_TABLES: Table[] = ["notes", "links", "tasks", "transactions", "timer_categories", "timer_sessions", "activity_setup"];
+// (combined export below replaces the old per-table loop)
 
 const ALL_TABLE_LABELS: Record<Table, string> = {
   notes: "Notas",
