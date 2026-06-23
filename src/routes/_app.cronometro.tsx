@@ -1691,35 +1691,25 @@ function FloatingWindowButton(_: {
 }) {
   const supportsDocPiP = typeof window !== "undefined" && "documentPictureInPicture" in window;
   const [open, setOpen] = useState<boolean>(() => {
-    try { return typeof window !== "undefined" && window.localStorage.getItem("floating_timer:open") === "1"; } catch { return false; }
+    try { return isFloatingTimerOpenSafe(); } catch { return false; }
   });
 
   useEffect(() => {
     const refresh = () => {
-      try { setOpen(window.localStorage.getItem("floating_timer:open") === "1"); } catch {}
+      try { setOpen(isFloatingTimerOpenSafe()); } catch {}
     };
-    window.addEventListener("floating-timer:toggle", refresh);
-    window.addEventListener("storage", refresh);
-    const t = setInterval(refresh, 1500);
-    return () => {
-      window.removeEventListener("floating-timer:toggle", refresh);
-      window.removeEventListener("storage", refresh);
-      clearInterval(t);
-    };
+    const t = setInterval(refresh, 800);
+    return () => clearInterval(t);
   }, []);
 
-  const toggle = () => {
-    if (!supportsDocPiP) {
-      alert("O teu browser não suporta janela flutuante (Document Picture-in-Picture). Usa Chrome/Edge atualizados em desktop.");
-      return;
+  const toggle = async () => {
+    if (open) {
+      closeFloatingTimer();
+      setOpen(false);
+    } else {
+      const ok = await openFloatingTimer();
+      setOpen(ok);
     }
-    try {
-      const next = !open;
-      if (next) window.localStorage.setItem("floating_timer:open", "1");
-      else window.localStorage.removeItem("floating_timer:open");
-      window.dispatchEvent(new Event("floating-timer:toggle"));
-      setOpen(next);
-    } catch {}
   };
 
   return (
@@ -1733,4 +1723,9 @@ function FloatingWindowButton(_: {
     </button>
   );
 }
+
+function isFloatingTimerOpenSafe() {
+  return isFloatingTimerOpen();
+}
+
 
