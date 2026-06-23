@@ -16,6 +16,7 @@ const titles: Record<string, string> = {
   "/noticias": "Notícias",
   "/email": "Email",
   "/projetos": "Projetos",
+  "/configuracoes": "Configurações",
 };
 
 export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
