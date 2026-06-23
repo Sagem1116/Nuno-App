@@ -6,6 +6,7 @@ import { TopBar } from "@/components/top-bar";
 import { runWeeklyAutoExports } from "@/lib/data-io";
 import { runScheduledChecks } from "@/lib/notification-scheduler";
 import { FloatingTimerHost } from "@/components/floating-timer-host";
+import { ImportProgressHost } from "@/components/import-progress-host";
 import { SHORTCUTS } from "@/lib/shortcuts";
 
 export const Route = createFileRoute("/_app")({
@@ -80,6 +81,7 @@ function AppLayout() {
         </main>
       </div>
       <FloatingTimerHost />
+      <ImportProgressHost />
     </div>
   );
 }

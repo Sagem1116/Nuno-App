@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { importProgress, askConflictResolution, type ConflictRow } from "@/lib/import-ui";
 
 // Bump SCHEMA_VERSION whenever the JSON envelope or item shape changes in a
 // non-backward-compatible way. Importers warn when reading a higher version.
@@ -144,47 +145,80 @@ export async function importTable(table: Table, userId: string) {
   const parsed = await pickJsonFile();
   if (!parsed) return;
   if (!validateEnvelope(parsed, table)) return;
-  if (table === "activity_setup") {
-    await importActivitySetup(userId, parsed);
-    return;
+
+  importProgress.start(`A importar ${table}`, 1);
+  try {
+    if (table === "activity_setup") {
+      importProgress.setLabel("Activity (categorias, projetos, regras)");
+      const s = await importActivitySetup(userId, parsed, { silent: true });
+      importProgress.completeStep({ label: "Activity", inserted: s.inserted, skipped: s.skipped, updated: 0, errors: s.errors });
+      importProgress.finish();
+      return;
+    }
+    if (table === "trips") {
+      importProgress.setLabel("Viagens");
+      const r = await importTripsFromParsed(userId, parsed, { silent: true });
+      importProgress.completeStep({ label: "Viagens", inserted: r.inserted, skipped: r.skipped, updated: 0, errors: r.errors.length });
+      importProgress.finish();
+      return;
+    }
+    const items: any[] = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as any)?.items)
+        ? (parsed as any).items
+        : [];
+    if (!items.length) { importProgress.finish("Sem itens para importar"); return; }
+
+    if (table === "timer_categories") {
+      importProgress.setLabel("Categorias do cronómetro");
+      const result = await importHierarchicalCategories("timer_categories", items, userId);
+      importProgress.completeStep({ label: "timer_categories", inserted: result.inserted, skipped: result.reused + result.skipped, updated: 0, errors: 0 });
+      importProgress.finish();
+      return;
+    }
+
+    const allowed = ALLOWED_FIELDS[table];
+    const rows = items.map((it) => {
+      const row: Record<string, unknown> = { user_id: userId };
+      for (const k of allowed) if (it[k] !== undefined && it[k] !== null) row[k] = it[k];
+      return row;
+    }).filter((r) => allowed.some((k) => r[k] !== undefined));
+    if (!rows.length) { importProgress.finish("Estrutura JSON não reconhecida"); return; }
+
+    if (table === "timer_sessions") {
+      importProgress.setLabel("Sessões do cronómetro");
+      const result = await replaceMatchingTimerSessions(rows, userId);
+      if (!result.ok) { importProgress.finish(result.error); return; }
+      importProgress.completeStep({ label: "timer_sessions", inserted: result.inserted, skipped: 0, updated: result.replaced, errors: 0 });
+      importProgress.finish();
+      return;
+    }
+
+    importProgress.setLabel(table);
+    const summary = await processTableInsert(table, rows, userId);
+    importProgress.completeStep({ label: table, ...summary });
+    importProgress.finish(summary.errors ? `${summary.errors} erro(s)` : null);
+  } catch (e: any) {
+    importProgress.finish(e?.message ?? "Erro");
   }
-  if (table === "trips") {
-    await importTripsFromParsed(userId, parsed);
-    return;
+}
+
+// Shared: dedup + conflict resolution + insert for a single table.
+async function processTableInsert(
+  table: Table,
+  rows: Record<string, unknown>[],
+  userId: string,
+): Promise<{ inserted: number; skipped: number; updated: number; errors: number }> {
+  const { rows: toInsert, skipped, conflicts } = await filterExistingRows(table, rows, userId);
+  const conf = await resolveAndApplyConflicts(table, conflicts);
+  let inserted = 0;
+  let errors = conf.errors;
+  if (toInsert.length) {
+    const { error } = await (supabase as any).from(table).insert(toInsert);
+    if (error) { errors += 1; toast.error(`${table}: ${error.message}`); }
+    else inserted = toInsert.length;
   }
-  const items: any[] = Array.isArray(parsed)
-    ? parsed
-    : Array.isArray((parsed as any)?.items)
-      ? (parsed as any).items
-      : [];
-  if (!items.length) { toast.error("Sem itens para importar"); return; }
-  if (table === "timer_categories") {
-    const result = await importHierarchicalCategories("timer_categories", items, userId);
-    toast.success(`${result.inserted} categoria(s) importadas${result.reused ? ` · ${result.reused} já existiam` : ""}`);
-    if (result.skipped) toast.warning(`${result.skipped} subcategoria(s) ignoradas por falta da categoria-mãe`);
-    return;
-  }
-  const allowed = ALLOWED_FIELDS[table];
-  const rows = items.map((it) => {
-    const row: Record<string, unknown> = { user_id: userId };
-    for (const k of allowed) if (it[k] !== undefined && it[k] !== null) row[k] = it[k];
-    return row;
-  }).filter((r) => allowed.some((k) => r[k] !== undefined));
-  if (!rows.length) { toast.error("Estrutura JSON não reconhecida"); return; }
-  if (table === "timer_sessions") {
-    const result = await replaceMatchingTimerSessions(rows, userId);
-    if (!result.ok) { toast.error(result.error); return; }
-    toast.success(`${result.inserted} sessão(ões) importada(s)${result.replaced ? ` · ${result.replaced} substituída(s)` : ""}`);
-    return;
-  }
-  const { rows: toInsert, skipped } = await filterExistingRows(table, rows, userId);
-  if (!toInsert.length) {
-    toast.info(`Nada para importar — ${skipped} item(s) já existiam`);
-    return;
-  }
-  const { error } = await supabase.from(table).insert(toInsert as any);
-  if (error) { toast.error(error.message); return; }
-  toast.success(`${toInsert.length} item(s) importados${skipped ? ` · ${skipped} já existiam` : ""}`);
+  return { inserted, skipped: skipped + conf.keptAsSkipped, updated: conf.updated, errors };
 }
 
 // ---------- Deduplication on import ----------
@@ -206,28 +240,80 @@ const DEDUP_KEYS: Partial<Record<Table, { fields: string[]; key: DedupKeyFn }>> 
   tasks:        { fields: ["title", "due_date", "status"],                        key: (r) => `${_norm(r.title)}|${_ts(r.due_date)}|${_norm(r.status)}` },
 };
 
+type ExistingRow = Record<string, unknown> & { id?: string };
+type DedupResult = {
+  rows: Record<string, unknown>[];
+  skipped: number;
+  conflicts: ConflictRow[];
+};
+
 async function filterExistingRows(
   table: Table,
   rows: Record<string, unknown>[],
   userId: string,
-): Promise<{ rows: Record<string, unknown>[]; skipped: number }> {
+): Promise<DedupResult> {
   const cfg = DEDUP_KEYS[table];
-  if (!cfg) return { rows, skipped: 0 };
+  if (!cfg) return { rows, skipped: 0, conflicts: [] };
+  const compareFields = (ALLOWED_FIELDS[table] ?? []).filter((f) => !cfg.fields.includes(f));
+  const selectCols = ["id", ...cfg.fields, ...compareFields].join(",");
   const { data: existing, error } = await (supabase as any)
     .from(table)
-    .select(cfg.fields.join(","))
+    .select(selectCols)
     .eq("user_id", userId);
-  if (error) return { rows, skipped: 0 };
-  const seen = new Set<string>((existing ?? []).map((r: any) => cfg.key(r)));
+  if (error) return { rows, skipped: 0, conflicts: [] };
+  const byKey = new Map<string, ExistingRow>();
+  for (const e of (existing ?? []) as ExistingRow[]) byKey.set(cfg.key(e), e);
+
   const out: Record<string, unknown>[] = [];
+  const conflicts: ConflictRow[] = [];
   let skipped = 0;
+  const seenIncoming = new Set<string>();
   for (const r of rows) {
     const k = cfg.key(r);
-    if (seen.has(k)) { skipped += 1; continue; }
-    seen.add(k);
-    out.push(r);
+    if (seenIncoming.has(k)) { skipped += 1; continue; }
+    seenIncoming.add(k);
+    const ex = byKey.get(k);
+    if (!ex) { out.push(r); continue; }
+    // Match by natural key — check if other fields differ
+    const diffs: ConflictRow["diffs"] = [];
+    for (const f of compareFields) {
+      const a = ex[f];
+      const b = r[f];
+      if (_norm(JSON.stringify(a ?? null)) !== _norm(JSON.stringify(b ?? null))) {
+        diffs.push({ field: f, existing: a, incoming: b });
+      }
+    }
+    if (!diffs.length) { skipped += 1; continue; }
+    conflicts.push({
+      table,
+      label: String(r.title ?? r.name ?? r.url ?? r.description ?? "(sem título)"),
+      diffs,
+      existingId: String(ex.id ?? ""),
+      incoming: r,
+    });
   }
-  return { rows: out, skipped };
+  return { rows: out, skipped, conflicts };
+}
+
+// Resolves conflicts via modal, applies "update" decisions, and returns counts.
+async function resolveAndApplyConflicts(
+  table: Table,
+  conflicts: ConflictRow[],
+): Promise<{ updated: number; keptAsSkipped: number; errors: number }> {
+  if (!conflicts.length) return { updated: 0, keptAsSkipped: 0, errors: 0 };
+  const decisions = await askConflictResolution(conflicts);
+  let updated = 0;
+  let keptAsSkipped = 0;
+  let errors = 0;
+  for (let i = 0; i < conflicts.length; i++) {
+    if (decisions[i] !== "update") { keptAsSkipped += 1; continue; }
+    const c = conflicts[i];
+    const patch: Record<string, unknown> = {};
+    for (const d of c.diffs) patch[d.field] = c.incoming[d.field] ?? null;
+    const { error } = await (supabase as any).from(table).update(patch).eq("id", c.existingId);
+    if (error) errors += 1; else updated += 1;
+  }
+  return { updated, keptAsSkipped, errors };
 }
 
 type TimerSessionImportResult =
@@ -367,14 +453,18 @@ async function exportActivitySetup(opts?: { silent?: boolean }) {
   return filename;
 }
 
-async function importActivitySetup(userId: string, parsed: any) {
-  if (!validateEnvelope(parsed, "activity_setup")) return;
+async function importActivitySetup(
+  userId: string,
+  parsed: any,
+  opts?: { silent?: boolean },
+): Promise<{ inserted: number; skipped: number; errors: number }> {
+  if (!validateEnvelope(parsed, "activity_setup")) return { inserted: 0, skipped: 0, errors: 1 };
   const categories = Array.isArray(parsed?.categories) ? parsed.categories : [];
   const projects = Array.isArray(parsed?.projects) ? parsed.projects : [];
   const rules = Array.isArray(parsed?.rules) ? parsed.rules : [];
   if (!categories.length && !projects.length && !rules.length) {
-    toast.error("JSON de Activity sem categorias, projetos ou regras");
-    return;
+    if (!opts?.silent) toast.error("JSON de Activity sem categorias, projetos ou regras");
+    return { inserted: 0, skipped: 0, errors: 0 };
   }
 
   try {
@@ -428,18 +518,24 @@ async function importActivitySetup(userId: string, parsed: any) {
         priority: Number(r.priority) || (r.rule_type === "app_name" ? 10 : 5),
       }))
       .filter((r: any) => !existingRuleKeys.has(ruleKey(r)));
+    let rulesInserted = 0;
     if (rows.length) {
       const { error } = await (supabase as any).from("activity_rules").insert(rows);
       if (error) throw error;
+      rulesInserted = rows.length;
     }
 
-    toast.success(
-      `Activity importado: ${catResult.inserted} categoria(s), ${projectsInserted} projeto(s), ${rows.length} regra(s)`,
-    );
-    if (catResult.reused || projectsReused) toast.info(`${catResult.reused + projectsReused} item(s) já existiam`);
-    if (catResult.skipped) toast.warning(`${catResult.skipped} subcategoria(s) ignoradas por falta da categoria-mãe`);
+    const inserted = catResult.inserted + projectsInserted + rulesInserted;
+    const skipped = catResult.reused + catResult.skipped + projectsReused + (rules.length - rulesInserted);
+    if (!opts?.silent) {
+      toast.success(`Activity importado: ${catResult.inserted} categoria(s), ${projectsInserted} projeto(s), ${rulesInserted} regra(s)`);
+      if (catResult.reused || projectsReused) toast.info(`${catResult.reused + projectsReused} item(s) já existiam`);
+      if (catResult.skipped) toast.warning(`${catResult.skipped} subcategoria(s) ignoradas por falta da categoria-mãe`);
+    }
+    return { inserted, skipped, errors: 0 };
   } catch (e: any) {
-    toast.error(e.message ?? "Erro ao importar Activity");
+    if (!opts?.silent) toast.error(e.message ?? "Erro ao importar Activity");
+    return { inserted: 0, skipped: 0, errors: 1 };
   }
 }
 
@@ -661,83 +757,102 @@ export async function importAllCombined(userId: string): Promise<void> {
     return;
   }
 
-  const counts: Record<string, number> = {};
-  const errors: string[] = [];
+  // Build the step plan upfront so the progress bar has a real total.
+  type StepDef = { label: string; run: () => Promise<{ inserted: number; skipped: number; updated: number; errors: number }> };
+  const steps: StepDef[] = [];
 
-  const insertSimple = async (table: Table, items: any[]) => {
-    const allowed = ALLOWED_FIELDS[table];
-    if (!allowed?.length) return 0;
-    const rows = (items ?? [])
-      .map((it) => {
-        const row: Record<string, unknown> = { user_id: userId };
-        for (const k of allowed) if (it[k] !== undefined && it[k] !== null) row[k] = it[k];
-        return row;
-      })
-      .filter((r) => allowed.some((k) => r[k] !== undefined));
-    if (!rows.length) return 0;
-    const { rows: toInsert } = await filterExistingRows(table, rows, userId);
-    if (!toInsert.length) return 0;
-    const { error } = await (supabase as any).from(table).insert(toInsert);
-    if (error) { errors.push(`${table}: ${error.message}`); return 0; }
-    return toInsert.length;
-  };
+  const mkSimpleStep = (table: Table, label: string, items: any[]): StepDef => ({
+    label,
+    run: async () => {
+      const allowed = ALLOWED_FIELDS[table];
+      const rows = (items ?? [])
+        .map((it) => {
+          const row: Record<string, unknown> = { user_id: userId };
+          for (const k of allowed) if (it[k] !== undefined && it[k] !== null) row[k] = it[k];
+          return row;
+        })
+        .filter((r) => allowed.some((k) => r[k] !== undefined));
+      if (!rows.length) return { inserted: 0, skipped: 0, updated: 0, errors: 0 };
+      return processTableInsert(table, rows, userId);
+    },
+  });
 
-  try {
-    counts.notes = await insertSimple("notes", sections.notes ?? []);
-    counts.links = await insertSimple("links", sections.links ?? []);
-    counts.tasks = await insertSimple("tasks", sections.tasks ?? []);
-    counts.transactions = await insertSimple("transactions", sections.transactions ?? []);
+  if (Array.isArray(sections.notes)) steps.push(mkSimpleStep("notes", "Notas", sections.notes));
+  if (Array.isArray(sections.links)) steps.push(mkSimpleStep("links", "Links", sections.links));
+  if (Array.isArray(sections.tasks)) steps.push(mkSimpleStep("tasks", "Tarefas", sections.tasks));
+  if (Array.isArray(sections.transactions)) steps.push(mkSimpleStep("transactions", "Transações", sections.transactions));
 
-    // timer_categories (hierarchical) + sessions
-    let timerIdMap = new Map<string, string>();
-    if (Array.isArray(sections.timer_categories) && sections.timer_categories.length) {
-      const r = await importHierarchicalCategories("timer_categories", sections.timer_categories, userId);
-      timerIdMap = r.idMap;
-      counts.timer_categories = r.inserted;
-    }
-    if (Array.isArray(sections.timer_sessions) && sections.timer_sessions.length) {
-      const rows = sections.timer_sessions
-        .map((s: any) => ({
-          user_id: userId,
-          category_id: s.category_id ? (timerIdMap.get(String(s.category_id)) ?? s.category_id) : null,
-          note: s.note ?? null,
-          started_at: s.started_at,
-          ended_at: s.ended_at ?? null,
-          reminders_minutes: s.reminders_minutes ?? [],
-          paused_at: s.paused_at ?? null,
-          paused_ms: s.paused_ms ?? 0,
-        }))
-        .filter((s: any) => s.started_at && s.ended_at);
-      if (rows.length) {
+  let timerIdMap = new Map<string, string>();
+  if (Array.isArray(sections.timer_categories) && sections.timer_categories.length) {
+    steps.push({
+      label: "Categorias do cronómetro",
+      run: async () => {
+        const r = await importHierarchicalCategories("timer_categories", sections.timer_categories, userId);
+        timerIdMap = r.idMap;
+        return { inserted: r.inserted, skipped: r.reused + r.skipped, updated: 0, errors: 0 };
+      },
+    });
+  }
+  if (Array.isArray(sections.timer_sessions) && sections.timer_sessions.length) {
+    steps.push({
+      label: "Sessões do cronómetro",
+      run: async () => {
+        const rows = sections.timer_sessions
+          .map((s: any) => ({
+            user_id: userId,
+            category_id: s.category_id ? (timerIdMap.get(String(s.category_id)) ?? s.category_id) : null,
+            note: s.note ?? null,
+            started_at: s.started_at,
+            ended_at: s.ended_at ?? null,
+            reminders_minutes: s.reminders_minutes ?? [],
+            paused_at: s.paused_at ?? null,
+            paused_ms: s.paused_ms ?? 0,
+          }))
+          .filter((s: any) => s.started_at && s.ended_at);
+        if (!rows.length) return { inserted: 0, skipped: 0, updated: 0, errors: 0 };
         const res = await replaceMatchingTimerSessions(rows, userId);
-        if (!res.ok) errors.push(`timer_sessions: ${res.error}`);
-        else counts.timer_sessions = res.inserted;
-      }
-    }
+        if (!res.ok) return { inserted: 0, skipped: 0, updated: 0, errors: 1 };
+        return { inserted: res.inserted, skipped: 0, updated: res.replaced, errors: 0 };
+      },
+    });
+  }
 
-    // activity_setup
-    if (sections.activity_setup) {
-      await importActivitySetup(userId, { ...sections.activity_setup, table: "activity_setup", schema_version: SCHEMA_VERSION, app: APP_NAME });
-      counts.activity_setup =
-        (sections.activity_setup.categories?.length ?? 0) +
-        (sections.activity_setup.projects?.length ?? 0) +
-        (sections.activity_setup.rules?.length ?? 0);
-    }
+  if (sections.activity_setup) {
+    steps.push({
+      label: "Activity",
+      run: async () => {
+        const s = await importActivitySetup(
+          userId,
+          { ...sections.activity_setup, table: "activity_setup", schema_version: SCHEMA_VERSION, app: APP_NAME },
+          { silent: true },
+        );
+        return { inserted: s.inserted, skipped: s.skipped, updated: 0, errors: s.errors };
+      },
+    });
+  }
 
-    if (Array.isArray(sections.trips) && sections.trips.length) {
-      const r = await insertTripBundles(userId, sections.trips);
-      counts.trips = r.inserted;
-      if (r.errors.length) errors.push(`trips: ${r.errors.slice(0, 2).join("; ")}`);
-    }
+  if (Array.isArray(sections.trips) && sections.trips.length) {
+    steps.push({
+      label: "Viagens",
+      run: async () => {
+        const r = await insertTripBundles(userId, sections.trips);
+        return { inserted: r.inserted, skipped: r.skipped, updated: 0, errors: r.errors.length };
+      },
+    });
+  }
 
-    const total = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
-    if (errors.length) {
-      toast.warning(`Importado parcialmente (${total}). Erros: ${errors.slice(0, 2).join("; ")}`);
-    } else {
-      toast.success(`Importação concluída: ${total} item(s)`);
+  importProgress.start("A importar backup", steps.length || 1);
+  let totalErrors = 0;
+  try {
+    for (const step of steps) {
+      importProgress.setLabel(step.label);
+      const s = await step.run();
+      totalErrors += s.errors;
+      importProgress.completeStep({ label: step.label, ...s });
     }
+    importProgress.finish(totalErrors ? `${totalErrors} erro(s) durante a importação` : null);
   } catch (e: any) {
-    toast.error(e?.message ?? "Erro ao importar backup");
+    importProgress.finish(e?.message ?? "Erro ao importar backup");
   }
 }
 
@@ -968,7 +1083,11 @@ async function insertTripBundles(userId: string, raw: any[]): Promise<{ inserted
   return { inserted, skipped, errors };
 }
 
-async function importTripsFromParsed(userId: string, parsed: any): Promise<void> {
+async function importTripsFromParsed(
+  userId: string,
+  parsed: any,
+  opts?: { silent?: boolean },
+): Promise<{ inserted: number; skipped: number; errors: string[] }> {
   const list: any[] = Array.isArray(parsed?.trips)
     ? parsed.trips
     : parsed?.bundle
@@ -976,12 +1095,18 @@ async function importTripsFromParsed(userId: string, parsed: any): Promise<void>
       : Array.isArray(parsed)
         ? parsed
         : [];
-  if (!list.length) { toast.error("Sem viagens reconhecidas no ficheiro"); return; }
+  if (!list.length) {
+    if (!opts?.silent) toast.error("Sem viagens reconhecidas no ficheiro");
+    return { inserted: 0, skipped: 0, errors: [] };
+  }
   const r = await insertTripBundles(userId, list);
-  if (r.inserted) toast.success(`${r.inserted} viagem(ns) importada(s)${r.skipped ? ` · ${r.skipped} já existiam` : ""}`);
-  else if (r.skipped) toast.info(`Nada para importar — ${r.skipped} viagem(ns) já existiam`);
-  if (r.errors.length) toast.warning(`Erros: ${r.errors.slice(0, 2).join("; ")}`);
-  if (!r.inserted && !r.errors.length && !r.skipped) toast.error("Nenhuma viagem importada");
+  if (!opts?.silent) {
+    if (r.inserted) toast.success(`${r.inserted} viagem(ns) importada(s)${r.skipped ? ` · ${r.skipped} já existiam` : ""}`);
+    else if (r.skipped) toast.info(`Nada para importar — ${r.skipped} viagem(ns) já existiam`);
+    if (r.errors.length) toast.warning(`Erros: ${r.errors.slice(0, 2).join("; ")}`);
+    if (!r.inserted && !r.errors.length && !r.skipped) toast.error("Nenhuma viagem importada");
+  }
+  return r;
 }
 
 
