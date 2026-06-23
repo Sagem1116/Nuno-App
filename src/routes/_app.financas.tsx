@@ -327,6 +327,20 @@ function FinancasPage() {
           <option value="all">Todas categorias</option>
           {cats.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
+        <div className="flex items-center gap-2">
+          <label className="text-[10px] uppercase tracking-wider text-muted-foreground">De</label>
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
+            className={inputCls + " md:w-40"} />
+          <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Até</label>
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
+            className={inputCls + " md:w-40"} />
+          {(fromDate || toDate) && (
+            <button type="button" onClick={() => { setFromDate(""); setToDate(""); }}
+              className="text-xs text-muted-foreground hover:text-destructive" title="Limpar datas">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* List */}
