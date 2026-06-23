@@ -483,10 +483,13 @@ function CronometroPage() {
       ? {
           active: true,
           sessionId: activeDb.id,
+          categoryId: activeDb.category_id ?? "",
           categoryName: activeCat?.name ?? "—",
           categoryColor: activeCat?.color ?? "#888",
           note: activeDb.note ?? "",
-          startedAt: activeStartedAt + activePausedMs + (activePausedAt ? Date.now() - activePausedAt : 0),
+          startedAt: activeStartedAt,
+          pausedAt: activePausedAt || null,
+          pausedMs: activePausedMs,
           reminders: activeDb.reminders_minutes ?? [],
         }
       : { active: false },
