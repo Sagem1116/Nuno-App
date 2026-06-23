@@ -453,14 +453,18 @@ async function exportActivitySetup(opts?: { silent?: boolean }) {
   return filename;
 }
 
-async function importActivitySetup(userId: string, parsed: any) {
-  if (!validateEnvelope(parsed, "activity_setup")) return;
+async function importActivitySetup(
+  userId: string,
+  parsed: any,
+  opts?: { silent?: boolean },
+): Promise<{ inserted: number; skipped: number; errors: number }> {
+  if (!validateEnvelope(parsed, "activity_setup")) return { inserted: 0, skipped: 0, errors: 1 };
   const categories = Array.isArray(parsed?.categories) ? parsed.categories : [];
   const projects = Array.isArray(parsed?.projects) ? parsed.projects : [];
   const rules = Array.isArray(parsed?.rules) ? parsed.rules : [];
   if (!categories.length && !projects.length && !rules.length) {
-    toast.error("JSON de Activity sem categorias, projetos ou regras");
-    return;
+    if (!opts?.silent) toast.error("JSON de Activity sem categorias, projetos ou regras");
+    return { inserted: 0, skipped: 0, errors: 0 };
   }
 
   try {
@@ -514,18 +518,24 @@ async function importActivitySetup(userId: string, parsed: any) {
         priority: Number(r.priority) || (r.rule_type === "app_name" ? 10 : 5),
       }))
       .filter((r: any) => !existingRuleKeys.has(ruleKey(r)));
+    let rulesInserted = 0;
     if (rows.length) {
       const { error } = await (supabase as any).from("activity_rules").insert(rows);
       if (error) throw error;
+      rulesInserted = rows.length;
     }
 
-    toast.success(
-      `Activity importado: ${catResult.inserted} categoria(s), ${projectsInserted} projeto(s), ${rows.length} regra(s)`,
-    );
-    if (catResult.reused || projectsReused) toast.info(`${catResult.reused + projectsReused} item(s) já existiam`);
-    if (catResult.skipped) toast.warning(`${catResult.skipped} subcategoria(s) ignoradas por falta da categoria-mãe`);
+    const inserted = catResult.inserted + projectsInserted + rulesInserted;
+    const skipped = catResult.reused + catResult.skipped + projectsReused + (rules.length - rulesInserted);
+    if (!opts?.silent) {
+      toast.success(`Activity importado: ${catResult.inserted} categoria(s), ${projectsInserted} projeto(s), ${rulesInserted} regra(s)`);
+      if (catResult.reused || projectsReused) toast.info(`${catResult.reused + projectsReused} item(s) já existiam`);
+      if (catResult.skipped) toast.warning(`${catResult.skipped} subcategoria(s) ignoradas por falta da categoria-mãe`);
+    }
+    return { inserted, skipped, errors: 0 };
   } catch (e: any) {
-    toast.error(e.message ?? "Erro ao importar Activity");
+    if (!opts?.silent) toast.error(e.message ?? "Erro ao importar Activity");
+    return { inserted: 0, skipped: 0, errors: 1 };
   }
 }
 
