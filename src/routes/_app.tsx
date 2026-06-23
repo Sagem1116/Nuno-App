@@ -81,6 +81,7 @@ function AppLayout() {
         </main>
       </div>
       <FloatingTimerHost />
+      <ImportProgressHost />
     </div>
   );
 }
