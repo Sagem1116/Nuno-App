@@ -130,6 +130,7 @@ const ALLOWED_FIELDS: Record<Table, string[]> = {
 
 export async function exportTable(table: Table, opts?: { silent?: boolean }) {
   if (table === "activity_setup") return exportActivitySetup(opts);
+  if (table === "trips") return exportAllTrips(opts);
   const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: false });
   if (error) { if (!opts?.silent) toast.error(error.message); return null; }
   const filename = `${table}-${stamp()}.json`;
@@ -145,6 +146,10 @@ export async function importTable(table: Table, userId: string) {
   if (!validateEnvelope(parsed, table)) return;
   if (table === "activity_setup") {
     await importActivitySetup(userId, parsed);
+    return;
+  }
+  if (table === "trips") {
+    await importTripsFromParsed(userId, parsed);
     return;
   }
   const items: any[] = Array.isArray(parsed)
