@@ -10,6 +10,7 @@ import {
 } from "./_app.notas";
 import { TagInput } from "@/components/tag-input";
 import { exportTable, importTable } from "@/lib/data-io";
+import { DangerZone, deleteAllForUser } from "@/components/danger-zone";
 
 export const Route = createFileRoute("/_app/links")({
   component: LinksPage,
