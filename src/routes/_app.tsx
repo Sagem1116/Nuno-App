@@ -79,6 +79,7 @@ function AppLayout() {
           <Outlet />
         </main>
       </div>
+      <FloatingTimerHost />
     </div>
   );
 }
