@@ -145,47 +145,80 @@ export async function importTable(table: Table, userId: string) {
   const parsed = await pickJsonFile();
   if (!parsed) return;
   if (!validateEnvelope(parsed, table)) return;
-  if (table === "activity_setup") {
-    await importActivitySetup(userId, parsed);
-    return;
+
+  importProgress.start(`A importar ${table}`, 1);
+  try {
+    if (table === "activity_setup") {
+      importProgress.setLabel("Activity (categorias, projetos, regras)");
+      const s = await importActivitySetup(userId, parsed, { silent: true });
+      importProgress.completeStep({ label: "Activity", inserted: s.inserted, skipped: s.skipped, updated: 0, errors: s.errors });
+      importProgress.finish();
+      return;
+    }
+    if (table === "trips") {
+      importProgress.setLabel("Viagens");
+      const r = await importTripsFromParsed(userId, parsed, { silent: true });
+      importProgress.completeStep({ label: "Viagens", inserted: r.inserted, skipped: r.skipped, updated: 0, errors: r.errors.length });
+      importProgress.finish();
+      return;
+    }
+    const items: any[] = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as any)?.items)
+        ? (parsed as any).items
+        : [];
+    if (!items.length) { importProgress.finish("Sem itens para importar"); return; }
+
+    if (table === "timer_categories") {
+      importProgress.setLabel("Categorias do cronómetro");
+      const result = await importHierarchicalCategories("timer_categories", items, userId);
+      importProgress.completeStep({ label: "timer_categories", inserted: result.inserted, skipped: result.reused + result.skipped, updated: 0, errors: 0 });
+      importProgress.finish();
+      return;
+    }
+
+    const allowed = ALLOWED_FIELDS[table];
+    const rows = items.map((it) => {
+      const row: Record<string, unknown> = { user_id: userId };
+      for (const k of allowed) if (it[k] !== undefined && it[k] !== null) row[k] = it[k];
+      return row;
+    }).filter((r) => allowed.some((k) => r[k] !== undefined));
+    if (!rows.length) { importProgress.finish("Estrutura JSON não reconhecida"); return; }
+
+    if (table === "timer_sessions") {
+      importProgress.setLabel("Sessões do cronómetro");
+      const result = await replaceMatchingTimerSessions(rows, userId);
+      if (!result.ok) { importProgress.finish(result.error); return; }
+      importProgress.completeStep({ label: "timer_sessions", inserted: result.inserted, skipped: 0, updated: result.replaced, errors: 0 });
+      importProgress.finish();
+      return;
+    }
+
+    importProgress.setLabel(table);
+    const summary = await processTableInsert(table, rows, userId);
+    importProgress.completeStep({ label: table, ...summary });
+    importProgress.finish(summary.errors ? `${summary.errors} erro(s)` : null);
+  } catch (e: any) {
+    importProgress.finish(e?.message ?? "Erro");
   }
-  if (table === "trips") {
-    await importTripsFromParsed(userId, parsed);
-    return;
+}
+
+// Shared: dedup + conflict resolution + insert for a single table.
+async function processTableInsert(
+  table: Table,
+  rows: Record<string, unknown>[],
+  userId: string,
+): Promise<{ inserted: number; skipped: number; updated: number; errors: number }> {
+  const { rows: toInsert, skipped, conflicts } = await filterExistingRows(table, rows, userId);
+  const conf = await resolveAndApplyConflicts(table, conflicts);
+  let inserted = 0;
+  let errors = conf.errors;
+  if (toInsert.length) {
+    const { error } = await (supabase as any).from(table).insert(toInsert);
+    if (error) { errors += 1; toast.error(`${table}: ${error.message}`); }
+    else inserted = toInsert.length;
   }
-  const items: any[] = Array.isArray(parsed)
-    ? parsed
-    : Array.isArray((parsed as any)?.items)
-      ? (parsed as any).items
-      : [];
-  if (!items.length) { toast.error("Sem itens para importar"); return; }
-  if (table === "timer_categories") {
-    const result = await importHierarchicalCategories("timer_categories", items, userId);
-    toast.success(`${result.inserted} categoria(s) importadas${result.reused ? ` · ${result.reused} já existiam` : ""}`);
-    if (result.skipped) toast.warning(`${result.skipped} subcategoria(s) ignoradas por falta da categoria-mãe`);
-    return;
-  }
-  const allowed = ALLOWED_FIELDS[table];
-  const rows = items.map((it) => {
-    const row: Record<string, unknown> = { user_id: userId };
-    for (const k of allowed) if (it[k] !== undefined && it[k] !== null) row[k] = it[k];
-    return row;
-  }).filter((r) => allowed.some((k) => r[k] !== undefined));
-  if (!rows.length) { toast.error("Estrutura JSON não reconhecida"); return; }
-  if (table === "timer_sessions") {
-    const result = await replaceMatchingTimerSessions(rows, userId);
-    if (!result.ok) { toast.error(result.error); return; }
-    toast.success(`${result.inserted} sessão(ões) importada(s)${result.replaced ? ` · ${result.replaced} substituída(s)` : ""}`);
-    return;
-  }
-  const { rows: toInsert, skipped } = await filterExistingRows(table, rows, userId);
-  if (!toInsert.length) {
-    toast.info(`Nada para importar — ${skipped} item(s) já existiam`);
-    return;
-  }
-  const { error } = await supabase.from(table).insert(toInsert as any);
-  if (error) { toast.error(error.message); return; }
-  toast.success(`${toInsert.length} item(s) importados${skipped ? ` · ${skipped} já existiam` : ""}`);
+  return { inserted, skipped: skipped + conf.keptAsSkipped, updated: conf.updated, errors };
 }
 
 // ---------- Deduplication on import ----------
