@@ -1115,6 +1115,20 @@ function CronometroPage() {
           }}
         />
       )}
+
+      {user && (
+        <DangerZone
+          title="Apagar todos os dados do cronómetro"
+          description="Remove permanentemente todas as sessões e categorias do cronómetro."
+          confirmText="APAGAR CRONOMETRO"
+          onConfirm={async () => {
+            const n = await deleteAllForUser(supabase, user.id, ["timer_sessions", "timer_categories"]);
+            qc.invalidateQueries({ queryKey: ["timer-sessions", user.id] });
+            qc.invalidateQueries({ queryKey: ["timer-categories", user.id] });
+            return { count: n };
+          }}
+        />
+      )}
     </div>
   );
 }
