@@ -816,10 +816,29 @@ function BackupsPanel({ userId }: { userId: string | undefined }) {
     setBusy(true);
     try {
       await exportAllCombined();
+      setSched(getGlobalSchedule());
     } finally {
       setBusy(false);
     }
   };
+
+  const importAll = async () => {
+    if (!userId) return;
+    setBusy(true);
+    try {
+      await importAllCombined(userId);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => forceTick((n) => n + 1), 10000);
+    return () => clearInterval(t);
+  }, []);
+  const lastResult = typeof window === "undefined" ? null : getLastAutoExportResult();
+  const nextAt = getNextAutoExportAt(sched);
 
   const weekDays = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
@@ -845,12 +864,64 @@ function BackupsPanel({ userId }: { userId: string | undefined }) {
               disabled={busy}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-primary to-primary-glow text-primary-foreground text-xs font-medium hover:shadow-glow-strong disabled:opacity-50"
             >
-              <Download className="h-3.5 w-3.5" /> {busy ? "A exportar..." : "Exportar tudo (JSON)"}
+              <Download className="h-3.5 w-3.5" /> {busy ? "A processar..." : "Exportar tudo (JSON)"}
+            </button>
+            <button
+              type="button"
+              onClick={importAll}
+              disabled={busy || !userId}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-input border border-border text-xs hover:border-primary/50 disabled:opacity-50"
+              title="Importar um backup combinado (todas as secções num só ficheiro)"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Importar tudo (JSON)
             </button>
             <span className="text-[11px] text-muted-foreground">
-              Descarrega um único ficheiro JSON com todas as secções (notas, links, tarefas, transações, cronómetro e Activity).
+              Um único ficheiro JSON com todas as secções (notas, links, tarefas, transações, cronómetro e Activity).
             </span>
           </div>
+
+          {/* Estado da auto-exportação */}
+          <div className="rounded-lg border border-border bg-card/40 p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Última execução</div>
+              <div className="mt-1 font-medium">
+                {sched.last ? new Date(sched.last).toLocaleString() : "Nunca"}
+              </div>
+              {lastResult && (
+                <div className={`mt-0.5 text-[11px] ${lastResult.ok ? "text-emerald-400" : "text-destructive"}`}>
+                  {lastResult.ok
+                    ? `✓ Sucesso${lastResult.count != null ? ` · ${lastResult.count} item(s)` : ""}`
+                    : `✗ Erro: ${lastResult.error ?? "desconhecido"}`}
+                </div>
+              )}
+              {lastResult?.filename && (
+                <div className="mt-0.5 text-[10px] text-muted-foreground truncate" title={lastResult.filename}>
+                  {lastResult.filename}
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Próximo agendamento</div>
+              <div className="mt-1 font-medium">
+                {sched.enabled
+                  ? (nextAt ? new Date(nextAt).toLocaleString() : "—")
+                  : "Desativado"}
+              </div>
+              <div className="mt-0.5 text-[10px] text-muted-foreground">
+                {sched.enabled ? `${sched.frequency} · ${String(sched.hour).padStart(2, "0")}:00` : "Ativa abaixo para agendar"}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Estado</div>
+              <div className={`mt-1 font-medium ${sched.enabled ? "text-primary" : "text-muted-foreground"}`}>
+                {sched.enabled ? "Auto-export ativo" : "Auto-export inativo"}
+              </div>
+              <div className="mt-0.5 text-[10px] text-muted-foreground">
+                Verificado a cada hora enquanto a app está aberta.
+              </div>
+            </div>
+          </div>
+
 
           <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
