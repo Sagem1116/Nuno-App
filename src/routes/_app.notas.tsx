@@ -307,6 +307,19 @@ function NotesPage() {
           onChanged={load}
         />
       )}
+
+      {user && (
+        <DangerZone
+          title="Apagar todas as notas"
+          description="Remove permanentemente todas as notas (incluindo favoritos e tags)."
+          confirmText="APAGAR NOTAS"
+          onConfirm={async () => {
+            const n = await deleteAllForUser(supabase, user.id, ["notes"]);
+            await load();
+            return { count: n };
+          }}
+        />
+      )}
     </div>
   );
 }
