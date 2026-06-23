@@ -125,6 +125,7 @@ const ALLOWED_FIELDS: Record<Table, string[]> = {
   timer_categories: ["name", "color", "parent_id"],
   timer_sessions: ["category_id", "note", "started_at", "ended_at", "reminders_minutes", "paused_at", "paused_ms"],
   activity_setup: [],
+  trips: [],
 };
 
 export async function exportTable(table: Table, opts?: { silent?: boolean }) {
