@@ -177,9 +177,57 @@ export async function importTable(table: Table, userId: string) {
     toast.success(`${result.inserted} sessão(ões) importada(s)${result.replaced ? ` · ${result.replaced} substituída(s)` : ""}`);
     return;
   }
-  const { error } = await supabase.from(table).insert(rows as any);
+  const { rows: toInsert, skipped } = await filterExistingRows(table, rows, userId);
+  if (!toInsert.length) {
+    toast.info(`Nada para importar — ${skipped} item(s) já existiam`);
+    return;
+  }
+  const { error } = await supabase.from(table).insert(toInsert as any);
   if (error) { toast.error(error.message); return; }
-  toast.success(`${rows.length} item(s) importados`);
+  toast.success(`${toInsert.length} item(s) importados${skipped ? ` · ${skipped} já existiam` : ""}`);
+}
+
+// ---------- Deduplication on import ----------
+//
+// To avoid creating duplicates when re-importing a backup, each table defines a
+// stable "natural key" from a small subset of fields. Rows whose key matches an
+// existing row for the same user are skipped on insert.
+type DedupKeyFn = (row: Record<string, unknown>) => string;
+const _norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
+const _ts = (v: unknown) => {
+  const ms = Date.parse(String(v ?? ""));
+  return Number.isFinite(ms) ? String(Math.round(ms / 60000)) : _norm(v);
+};
+const DEDUP_KEYS: Partial<Record<Table, { fields: string[]; key: DedupKeyFn }>> = {
+  notes:        { fields: ["title", "content"],                                   key: (r) => `${_norm(r.title)}|${_norm(r.content)}` },
+  links:        { fields: ["url", "title"],                                       key: (r) => `${_norm(r.url)}|${_norm(r.title)}` },
+  transactions: { fields: ["amount", "type", "category", "occurred_at", "description"],
+                  key: (r) => `${_norm(r.amount)}|${_norm(r.type)}|${_norm(r.category)}|${_ts(r.occurred_at)}|${_norm(r.description)}` },
+  tasks:        { fields: ["title", "due_date", "status"],                        key: (r) => `${_norm(r.title)}|${_ts(r.due_date)}|${_norm(r.status)}` },
+};
+
+async function filterExistingRows(
+  table: Table,
+  rows: Record<string, unknown>[],
+  userId: string,
+): Promise<{ rows: Record<string, unknown>[]; skipped: number }> {
+  const cfg = DEDUP_KEYS[table];
+  if (!cfg) return { rows, skipped: 0 };
+  const { data: existing, error } = await (supabase as any)
+    .from(table)
+    .select(cfg.fields.join(","))
+    .eq("user_id", userId);
+  if (error) return { rows, skipped: 0 };
+  const seen = new Set<string>((existing ?? []).map((r: any) => cfg.key(r)));
+  const out: Record<string, unknown>[] = [];
+  let skipped = 0;
+  for (const r of rows) {
+    const k = cfg.key(r);
+    if (seen.has(k)) { skipped += 1; continue; }
+    seen.add(k);
+    out.push(r);
+  }
+  return { rows: out, skipped };
 }
 
 type TimerSessionImportResult =
