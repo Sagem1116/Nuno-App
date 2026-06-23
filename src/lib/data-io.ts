@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { importProgress, askConflictResolution, type ConflictRow } from "@/lib/import-ui";
 
 // Bump SCHEMA_VERSION whenever the JSON envelope or item shape changes in a
 // non-backward-compatible way. Importers warn when reading a higher version.
