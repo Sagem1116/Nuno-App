@@ -22,6 +22,7 @@ const BACKUP_TABLES: { table: DataTable; label: string }[] = [
   { table: "timer_categories", label: "Categorias do cronómetro" },
   { table: "timer_sessions", label: "Sessões do cronómetro" },
   { table: "activity_setup", label: "Activity: categorias, projetos e regras" },
+  { table: "trips", label: "Viagens (Travel Planner)" },
 ];
 
 function ConfiguracoesPage() {

@@ -69,6 +69,8 @@ function FinancasPage() {
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<"all" | TxType>("all");
   const [filterCat, setFilterCat] = useState<string>("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [catManagerOpen, setCatManagerOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
 
@@ -147,13 +149,20 @@ function FinancasPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
+    const fromTs = fromDate ? new Date(fromDate + "T00:00:00").getTime() : null;
+    const toTs = toDate ? new Date(toDate + "T23:59:59.999").getTime() : null;
     return txs.filter((t) => {
       if (filterType !== "all" && t.type !== filterType) return false;
       if (filterCat !== "all" && t.category !== filterCat) return false;
+      if (fromTs != null || toTs != null) {
+        const ts = new Date(t.occurred_at).getTime();
+        if (fromTs != null && ts < fromTs) return false;
+        if (toTs != null && ts > toTs) return false;
+      }
       if (!q) return true;
       return t.description.toLowerCase().includes(q) || t.category.toLowerCase().includes(q);
     });
-  }, [txs, search, filterType, filterCat]);
+  }, [txs, search, filterType, filterCat, fromDate, toDate]);
 
   const remove = async (id: string) => {
     if (!confirm("Eliminar transação?")) return;
@@ -318,6 +327,20 @@ function FinancasPage() {
           <option value="all">Todas categorias</option>
           {cats.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
+        <div className="flex items-center gap-2">
+          <label className="text-[10px] uppercase tracking-wider text-muted-foreground">De</label>
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
+            className={inputCls + " md:w-40"} />
+          <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Até</label>
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
+            className={inputCls + " md:w-40"} />
+          {(fromDate || toDate) && (
+            <button type="button" onClick={() => { setFromDate(""); setToDate(""); }}
+              className="text-xs text-muted-foreground hover:text-destructive" title="Limpar datas">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* List */}

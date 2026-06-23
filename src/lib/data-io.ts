@@ -111,7 +111,8 @@ export type Table =
   | "tasks"
   | "timer_categories"
   | "timer_sessions"
-  | "activity_setup";
+  | "activity_setup"
+  | "trips";
 
 export type ImportTable = Table | "activity_logs";
 
@@ -124,10 +125,12 @@ const ALLOWED_FIELDS: Record<Table, string[]> = {
   timer_categories: ["name", "color", "parent_id"],
   timer_sessions: ["category_id", "note", "started_at", "ended_at", "reminders_minutes", "paused_at", "paused_ms"],
   activity_setup: [],
+  trips: [],
 };
 
 export async function exportTable(table: Table, opts?: { silent?: boolean }) {
   if (table === "activity_setup") return exportActivitySetup(opts);
+  if (table === "trips") return exportAllTrips(opts);
   const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: false });
   if (error) { if (!opts?.silent) toast.error(error.message); return null; }
   const filename = `${table}-${stamp()}.json`;
@@ -143,6 +146,10 @@ export async function importTable(table: Table, userId: string) {
   if (!validateEnvelope(parsed, table)) return;
   if (table === "activity_setup") {
     await importActivitySetup(userId, parsed);
+    return;
+  }
+  if (table === "trips") {
+    await importTripsFromParsed(userId, parsed);
     return;
   }
   const items: any[] = Array.isArray(parsed)
@@ -541,7 +548,7 @@ export async function exportAllCombined(opts?: { silent?: boolean }): Promise<st
   const sections: Record<string, unknown> = {};
   let total = 0;
   try {
-    const [n, l, ta, tr, tc, ts, ac, ap, ar] = await Promise.all([
+    const [n, l, ta, tr, tc, ts, ac, ap, ar, trips] = await Promise.all([
       supabase.from("notes").select("*").order("created_at", { ascending: false }),
       supabase.from("links").select("*").order("created_at", { ascending: false }),
       supabase.from("tasks").select("*").order("created_at", { ascending: false }),
@@ -551,6 +558,7 @@ export async function exportAllCombined(opts?: { silent?: boolean }): Promise<st
       (supabase as any).from("activity_categories").select("*").order("created_at", { ascending: true }),
       (supabase as any).from("activity_projects").select("*").order("created_at", { ascending: true }),
       (supabase as any).from("activity_rules").select("*").order("priority", { ascending: false }),
+      collectAllTrips(),
     ]);
     const firstErr = [n, l, ta, tr, tc, ts, ac, ap, ar].find((r) => r.error)?.error;
     if (firstErr) {
@@ -569,10 +577,12 @@ export async function exportAllCombined(opts?: { silent?: boolean }): Promise<st
       projects: ap.data ?? [],
       rules: ar.data ?? [],
     };
+    sections.trips = trips;
     total =
       (n.data?.length ?? 0) + (l.data?.length ?? 0) + (ta.data?.length ?? 0) +
       (tr.data?.length ?? 0) + (tc.data?.length ?? 0) + (ts.data?.length ?? 0) +
-      (ac.data?.length ?? 0) + (ap.data?.length ?? 0) + (ar.data?.length ?? 0);
+      (ac.data?.length ?? 0) + (ap.data?.length ?? 0) + (ar.data?.length ?? 0) +
+      (trips?.length ?? 0);
   } catch (e: any) {
     if (!opts?.silent) toast.error(e?.message ?? "Erro a exportar");
     setLastAutoExportResult({ ok: false, at: Date.now(), error: e?.message ?? "Erro" });
@@ -664,6 +674,12 @@ export async function importAllCombined(userId: string): Promise<void> {
         (sections.activity_setup.rules?.length ?? 0);
     }
 
+    if (Array.isArray(sections.trips) && sections.trips.length) {
+      const r = await insertTripBundles(userId, sections.trips);
+      counts.trips = r.inserted;
+      if (r.errors.length) errors.push(`trips: ${r.errors.slice(0, 2).join("; ")}`);
+    }
+
     const total = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
     if (errors.length) {
       toast.warning(`Importado parcialmente (${total}). Erros: ${errors.slice(0, 2).join("; ")}`);
@@ -728,5 +744,192 @@ export function recordLastImportIds(table: ImportTable, ids: string[]) {
 
 export function getLastImportIds(table: ImportTable): string[] {
   return readImportIds()[table] ?? [];
+}
+
+// ---------- Travel Planner export/import (single trip + all trips) ----------
+//
+// A "trip bundle" packages a trip with every sub-page that the Travel Planner
+// renders: overview (trip_items), itinerary (trip_days + trip_itinerary_items),
+// reservations + expenses (subsets of itinerary), documents (trip_item_attachments
+// joined with file_metadata for reference). File binaries are NOT exported —
+// only metadata references are carried so existing files re-link by id when
+// importing back into the same account.
+
+export type TripBundle = {
+  trip: Record<string, any>;
+  items: any[];                 // trip_items (overview quick items)
+  days: any[];                  // trip_days
+  itinerary_items: any[];       // trip_itinerary_items (powers reservations + expenses)
+  attachments: any[];           // trip_item_attachments (+ file_metadata snapshot)
+};
+
+async function loadTripBundle(tripId: string): Promise<TripBundle | null> {
+  const [{ data: trip, error: tErr }, items, days, planItems, atts] = await Promise.all([
+    (supabase as any).from("trips").select("*").eq("id", tripId).single(),
+    (supabase as any).from("trip_items").select("*").eq("trip_id", tripId).order("created_at", { ascending: true }),
+    (supabase as any).from("trip_days").select("*").eq("trip_id", tripId).order("day_order", { ascending: true }),
+    (supabase as any).from("trip_itinerary_items").select("*").eq("trip_id", tripId).order("day_id", { ascending: true }).order("order_index", { ascending: true }),
+    (supabase as any).from("trip_item_attachments").select("*, file_metadata(*)").eq("trip_id", tripId),
+  ]);
+  if (tErr || !trip) return null;
+  return {
+    trip,
+    items: items.data ?? [],
+    days: days.data ?? [],
+    itinerary_items: planItems.data ?? [],
+    attachments: atts.data ?? [],
+  };
+}
+
+async function collectAllTrips(): Promise<TripBundle[]> {
+  const { data: trips } = await (supabase as any).from("trips").select("id").order("created_at", { ascending: true });
+  const out: TripBundle[] = [];
+  for (const t of (trips ?? []) as Array<{ id: string }>) {
+    const b = await loadTripBundle(t.id);
+    if (b) out.push(b);
+  }
+  return out;
+}
+
+export async function exportTrip(tripId: string, opts?: { silent?: boolean }): Promise<string | null> {
+  const bundle = await loadTripBundle(tripId);
+  if (!bundle) { if (!opts?.silent) toast.error("Viagem não encontrada"); return null; }
+  const safeName = String(bundle.trip.name || bundle.trip.destination || "viagem").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "viagem";
+  const filename = `trip-${safeName}-${stamp()}.json`;
+  downloadJson(filename, buildEnvelope("trip", { bundle }));
+  if (!opts?.silent) {
+    const total = bundle.items.length + bundle.days.length + bundle.itinerary_items.length + bundle.attachments.length;
+    toast.success(`Viagem exportada (${total} sub-item(s))`);
+  }
+  return filename;
+}
+
+export async function exportAllTrips(opts?: { silent?: boolean }): Promise<string | null> {
+  const bundles = await collectAllTrips();
+  if (!bundles.length) { if (!opts?.silent) toast.error("Sem viagens para exportar"); return null; }
+  const filename = `trips-${stamp()}.json`;
+  downloadJson(filename, buildEnvelope("trips", { trips: bundles }));
+  if (!opts?.silent) toast.success(`${bundles.length} viagem(ns) exportada(s)`);
+  recordVersion("trips", filename, bundles.length);
+  return filename;
+}
+
+// Insert one trip bundle into the target account. New ids are generated for
+// trip / day / itinerary_item / attachment so the import is non-destructive
+// (running twice creates duplicates). Public sharing fields are stripped.
+async function insertTripBundle(userId: string, bundle: any): Promise<{ ok: boolean; error?: string; tripId?: string }> {
+  if (!bundle?.trip) return { ok: false, error: "Sem dados de viagem" };
+  const { id: _oldId, user_id: _u, created_at: _c, updated_at: _up, public_slug: _ps, is_public: _ip, ...tripRest } = bundle.trip;
+  const { data: newTrip, error: tErr } = await (supabase as any).from("trips").insert({ ...tripRest, user_id: userId, public_slug: null, is_public: false }).select("id").single();
+  if (tErr || !newTrip) return { ok: false, error: tErr?.message ?? "Falha ao criar viagem" };
+  const newTripId = newTrip.id as string;
+
+  if (Array.isArray(bundle.items) && bundle.items.length) {
+    const rows = bundle.items.map((it: any) => ({
+      trip_id: newTripId, user_id: userId,
+      kind: it.kind, label: it.label, url: it.url ?? null,
+      price: it.price ?? null, done: !!it.done,
+    }));
+    await (supabase as any).from("trip_items").insert(rows);
+  }
+
+  const dayIdMap = new Map<string, string>();
+  if (Array.isArray(bundle.days) && bundle.days.length) {
+    const dayRows = bundle.days.map((d: any) => ({
+      trip_id: newTripId, user_id: userId,
+      day_order: d.day_order ?? 0, day_date: d.day_date ?? null,
+      title: d.title ?? "", notes: d.notes ?? "",
+    }));
+    const { data: insDays } = await (supabase as any).from("trip_days").insert(dayRows).select("id");
+    (insDays ?? []).forEach((row: any, i: number) => {
+      const oldId = bundle.days[i]?.id;
+      if (oldId) dayIdMap.set(String(oldId), String(row.id));
+    });
+  }
+
+  const itemIdMap = new Map<string, string>();
+  if (Array.isArray(bundle.itinerary_items) && bundle.itinerary_items.length) {
+    const planRows: any[] = [];
+    const sourceOrder: string[] = [];
+    for (const it of bundle.itinerary_items) {
+      const newDayId = dayIdMap.get(String(it.day_id));
+      if (!newDayId) continue;
+      planRows.push({
+        trip_id: newTripId, day_id: newDayId, user_id: userId,
+        item_type: it.item_type, title: it.title ?? "",
+        description: it.description ?? "", scheduled_at: it.scheduled_at ?? null,
+        location: it.location ?? "", notes: it.notes ?? "",
+        order_index: it.order_index ?? 0,
+        amount: it.amount ?? null, currency: it.currency ?? "EUR",
+      });
+      sourceOrder.push(String(it.id));
+    }
+    if (planRows.length) {
+      const { data: insItems } = await (supabase as any).from("trip_itinerary_items").insert(planRows).select("id");
+      (insItems ?? []).forEach((row: any, i: number) => {
+        const oldId = sourceOrder[i];
+        if (oldId) itemIdMap.set(oldId, String(row.id));
+      });
+    }
+  }
+
+  if (Array.isArray(bundle.attachments) && bundle.attachments.length) {
+    // Only re-link attachments where the underlying file_metadata id still
+    // exists for this user; we don't recreate files on storage from JSON.
+    const fmIds = Array.from(new Set(bundle.attachments.map((a: any) => a.file_metadata_id).filter(Boolean)));
+    const { data: existing } = fmIds.length
+      ? await (supabase as any).from("file_metadata").select("id").in("id", fmIds).eq("user_id", userId)
+      : { data: [] as any[] };
+    const existingIds = new Set((existing ?? []).map((r: any) => String(r.id)));
+    const rows = bundle.attachments
+      .filter((a: any) => existingIds.has(String(a.file_metadata_id)))
+      .map((a: any) => {
+        const newItemId = itemIdMap.get(String(a.item_id));
+        const newDayId = dayIdMap.get(String(a.day_id));
+        if (!newItemId || !newDayId) return null;
+        return {
+          trip_id: newTripId, day_id: newDayId, item_id: newItemId,
+          user_id: userId, file_metadata_id: a.file_metadata_id,
+        };
+      })
+      .filter(Boolean);
+    if (rows.length) await (supabase as any).from("trip_item_attachments").insert(rows);
+  }
+
+  return { ok: true, tripId: newTripId };
+}
+
+async function insertTripBundles(userId: string, raw: any[]): Promise<{ inserted: number; errors: string[] }> {
+  let inserted = 0;
+  const errors: string[] = [];
+  for (const b of raw) {
+    const r = await insertTripBundle(userId, b);
+    if (r.ok) inserted += 1;
+    else if (r.error) errors.push(r.error);
+  }
+  return { inserted, errors };
+}
+
+async function importTripsFromParsed(userId: string, parsed: any): Promise<void> {
+  // Accept either a single trip envelope ({bundle}), a multi-trip envelope
+  // ({trips: [bundle, ...]}), or a bare array of bundles.
+  const list: any[] = Array.isArray(parsed?.trips)
+    ? parsed.trips
+    : parsed?.bundle
+      ? [parsed.bundle]
+      : Array.isArray(parsed)
+        ? parsed
+        : [];
+  if (!list.length) { toast.error("Sem viagens reconhecidas no ficheiro"); return; }
+  const r = await insertTripBundles(userId, list);
+  if (r.inserted) toast.success(`${r.inserted} viagem(ns) importada(s)`);
+  if (r.errors.length) toast.warning(`Erros: ${r.errors.slice(0, 2).join("; ")}`);
+  if (!r.inserted && !r.errors.length) toast.error("Nenhuma viagem importada");
+}
+
+export async function importTripsFromFile(userId: string): Promise<void> {
+  const parsed = await pickJsonFile();
+  if (!parsed) return;
+  await importTripsFromParsed(userId, parsed);
 }
 

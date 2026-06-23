@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft, Plus, X, Trash2, MapPin, Calendar as CalIcon, Wallet,
   ListChecks, Link2, Lightbulb, ExternalLink, Pencil, Map, Activity,
-  Coffee, Truck, FileText, Plane, Globe,
+  Coffee, Truck, FileText, Plane, Globe, Download,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
@@ -14,6 +14,7 @@ import { BUCKET, getSignedUrl } from "@/lib/drive";
 import { TripDialog, type Trip } from "@/routes/_app.viagens";
 import { TravelAssistant } from "@/components/travel-assistant";
 import { ShareTripButton } from "@/components/share-trip-button";
+import { exportTrip, importTripsFromFile } from "@/lib/data-io";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 type TripDialogData = Parameters<Parameters<typeof TripDialog>[0]["onSave"]>[0];
@@ -392,14 +393,24 @@ export function TripDetailView({ tripId, effectiveUserId, isPublic, backHref }: 
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {!isPublic && (
-              <ShareTripButton
-                tripId={trip.id}
-                initialSlug={(trip as any).public_slug ?? null}
-                initialPublic={!!(trip as any).is_public}
-                onChange={({ slug, isPublic: pub }) =>
-                  setTrip((currentTrip) => (currentTrip ? ({ ...currentTrip, public_slug: slug, is_public: pub } as any) : currentTrip))
-                }
-              />
+              <>
+                <ShareTripButton
+                  tripId={trip.id}
+                  initialSlug={(trip as any).public_slug ?? null}
+                  initialPublic={!!(trip as any).is_public}
+                  onChange={({ slug, isPublic: pub }) =>
+                    setTrip((currentTrip) => (currentTrip ? ({ ...currentTrip, public_slug: slug, is_public: pub } as any) : currentTrip))
+                  }
+                />
+                <button onClick={() => exportTrip(trip.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
+                  title="Exporta esta viagem (overview, itinerário, reservas, documentos e despesas)">
+                  <Download className="h-3.5 w-3.5" /> Exportar
+                </button>
+                <button onClick={async () => { await importTripsFromFile(userId); await load(); }} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
+                  title="Importa uma viagem a partir de um ficheiro JSON">
+                  Importar
+                </button>
+              </>
             )}
             <button onClick={() => setEditOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary">
               <Pencil className="h-3.5 w-3.5" /> Editar viagem
