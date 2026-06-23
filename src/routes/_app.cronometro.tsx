@@ -11,6 +11,7 @@ import {
   PieChart, Pie, Cell,
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import { DangerZone, deleteAllForUser } from "@/components/danger-zone";
 import { useAuth } from "@/lib/auth";
 import { useNativeTimerMirror } from "@/lib/native-timer-mirror";
 import { buildEnvelope, downloadJson, importHierarchicalCategories, pickJsonFile, validateEnvelope } from "@/lib/data-io";
@@ -1111,6 +1112,20 @@ function CronometroPage() {
           onSave={(updated) => {
             updateSessionMut.mutate(updated);
             setEditingSession(null);
+          }}
+        />
+      )}
+
+      {user && (
+        <DangerZone
+          title="Apagar todos os dados do cronómetro"
+          description="Remove permanentemente todas as sessões e categorias do cronómetro."
+          confirmText="APAGAR CRONOMETRO"
+          onConfirm={async () => {
+            const n = await deleteAllForUser(supabase, user.id, ["timer_sessions", "timer_categories"]);
+            qc.invalidateQueries({ queryKey: ["timer-sessions", user.id] });
+            qc.invalidateQueries({ queryKey: ["timer-categories", user.id] });
+            return { count: n };
           }}
         />
       )}

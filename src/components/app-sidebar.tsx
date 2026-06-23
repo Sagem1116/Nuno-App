@@ -37,6 +37,7 @@ const items = [
   { title: "Apps", url: "/apps", icon: Plug },
   { title: "Nuno AI", url: "/ai", icon: Brain },
   { title: "Atalhos", url: "/atalhos", icon: Keyboard },
+  { title: "Configurações", url: "/configuracoes", icon: Plug },
 ] as const;
 
 interface AppSidebarProps {

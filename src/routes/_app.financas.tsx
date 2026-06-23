@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Plus, Trash2, Pencil, X, Wallet, TrendingUp, TrendingDown, Search,
-  Download, Upload, Tags as TagsIcon, Check,
+  Download, Upload, Tags as TagsIcon, Check, ArrowRightLeft,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/auth";
 import { Field, inputCls } from "@/routes/_app.notas";
 import { exportTable, importTable } from "@/lib/data-io";
 import { AutoExportMenu } from "@/components/auto-export-menu";
+import { DangerZone, deleteAllForUser } from "@/components/danger-zone";
 
 export const Route = createFileRoute("/_app/financas")({
   component: FinancasPage,
@@ -69,6 +70,7 @@ function FinancasPage() {
   const [filterType, setFilterType] = useState<"all" | TxType>("all");
   const [filterCat, setFilterCat] = useState<string>("all");
   const [catManagerOpen, setCatManagerOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
 
   const loadCats = async () => {
     const { data } = await (supabase as any)
@@ -207,6 +209,13 @@ function FinancasPage() {
             <Upload className="h-3.5 w-3.5" /> Importar JSON
           </button>
           <AutoExportMenu table="transactions" label="Finanças" />
+          <button
+            onClick={() => setTransferOpen(true)}
+            className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg bg-sky-500/15 text-sky-300 border border-sky-500/40 text-xs hover:border-sky-400"
+            title="Transferir dinheiro da conta pessoal para poupanças"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5" /> Pessoal → Poupanças
+          </button>
           <button
             onClick={() => { setEditing(null); setOpen(true); }}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-medium text-sm hover:shadow-glow-strong transition-all"
@@ -385,6 +394,86 @@ function FinancasPage() {
           onChanged={async () => setCats(await loadCats())}
         />
       )}
+
+      {transferOpen && user && (
+        <TransferDialog
+          userId={user.id}
+          onClose={() => setTransferOpen(false)}
+          onDone={async () => { setTransferOpen(false); await load(); }}
+        />
+      )}
+
+      {user && (
+        <DangerZone
+          title="Apagar todas as transações"
+          description="Remove permanentemente todas as transações. As categorias mantêm-se."
+          confirmText="APAGAR FINANCAS"
+          onConfirm={async () => {
+            const n = await deleteAllForUser(supabase, user.id, ["transactions"]);
+            await load();
+            return { count: n };
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function TransferDialog({
+  userId, onClose, onDone,
+}: { userId: string; onClose: () => void; onDone: () => Promise<void> | void }) {
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("Transferência para poupanças");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const v = parseFloat(amount.replace(",", "."));
+    if (!v || v <= 0) { setError("Valor inválido"); return; }
+    setBusy(true);
+    setError(null);
+    const rows = [
+      { user_id: userId, amount: v, type: "expense", category: "transferência", description, occurred_at: date },
+      { user_id: userId, amount: v, type: "income", category: "poupanças", description, occurred_at: date },
+    ];
+    const { error } = await supabase.from("transactions").insert(rows as any);
+    setBusy(false);
+    if (error) { setError(error.message); return; }
+    await onDone();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm grid place-items-center p-4">
+      <form onSubmit={submit} className="glass-card neon-border w-full max-w-md p-6 space-y-4 page-enter">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold neon-text flex items-center gap-2">
+            <ArrowRightLeft className="h-5 w-5" /> Pessoal → Poupanças
+          </h3>
+          <button type="button" onClick={onClose} className="p-1 hover:text-primary"><X className="h-4 w-4" /></button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Cria duas transações: uma saída da conta pessoal (categoria "transferência") e uma entrada em poupanças. O saldo total mantém-se; o saldo pessoal diminui e as poupanças aumentam.
+        </p>
+        <Field label="Valor (€)">
+          <input autoFocus value={amount} inputMode="decimal" onChange={(e) => setAmount(e.target.value)} placeholder="0,00" className={inputCls} />
+        </Field>
+        <Field label="Data">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="Descrição">
+          <input value={description} maxLength={200} onChange={(e) => setDescription(e.target.value)} className={inputCls} />
+        </Field>
+        {error && <div className="text-xs text-destructive">{error}</div>}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm hover:bg-accent">Cancelar</button>
+          <button type="submit" disabled={busy || !amount}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-sky-500 text-white hover:bg-sky-400 disabled:opacity-50">
+            Transferir
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

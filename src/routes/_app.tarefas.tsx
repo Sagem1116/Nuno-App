@@ -15,6 +15,7 @@ import { useAuth } from "@/lib/auth";
 import { Field, inputCls, EmptyState } from "./_app.notas";
 import { exportTable, importTable } from "@/lib/data-io";
 import { AutoExportMenu } from "@/components/auto-export-menu";
+import { DangerZone, deleteAllForUser } from "@/components/danger-zone";
 import { snooze, takePendingSnoozePrompt } from "@/lib/notifications";
 
 export const Route = createFileRoute("/_app/tarefas")({
@@ -269,6 +270,18 @@ function TasksPage() {
             <DayTasksList date={selectedDay} tasks={filteredAll} onToggle={toggleStatus} onEdit={(t) => { setEditing(t); setOpen(true); }} onDelete={remove} />
           </div>
         </div>
+      )}
+      {user && (
+        <DangerZone
+          title="Apagar todas as tarefas"
+          description="Remove permanentemente todas as tarefas (pendentes e concluídas)."
+          confirmText="APAGAR TAREFAS"
+          onConfirm={async () => {
+            const n = await deleteAllForUser(supabase, user.id, ["tasks"]);
+            await load();
+            return { count: n };
+          }}
+        />
       )}
     </div>
   );

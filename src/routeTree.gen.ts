@@ -30,6 +30,7 @@ import { Route as AppEmailRouteImport } from './routes/_app.email'
 import { Route as AppDriveRouteImport } from './routes/_app.drive'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppCronometroRouteImport } from './routes/_app.cronometro'
+import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoes'
 import { Route as AppAtalhosRouteImport } from './routes/_app.atalhos'
 import { Route as AppAppsRouteImport } from './routes/_app.apps'
 import { Route as AppAiRouteImport } from './routes/_app.ai'
@@ -153,6 +154,11 @@ const AppCronometroRoute = AppCronometroRouteImport.update({
   path: '/cronometro',
   getParentRoute: () => AppRoute,
 } as any)
+const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAtalhosRoute = AppAtalhosRouteImport.update({
   id: '/atalhos',
   path: '/atalhos',
@@ -252,6 +258,7 @@ export interface FileRoutesByFullPath {
   '/ai': typeof AppAiRouteWithChildren
   '/apps': typeof AppAppsRoute
   '/atalhos': typeof AppAtalhosRoute
+  '/configuracoes': typeof AppConfiguracoesRoute
   '/cronometro': typeof AppCronometroRoute
   '/dashboard': typeof AppDashboardRoute
   '/drive': typeof AppDriveRouteWithChildren
@@ -291,6 +298,7 @@ export interface FileRoutesByTo {
   '/activity': typeof AppActivityRoute
   '/apps': typeof AppAppsRoute
   '/atalhos': typeof AppAtalhosRoute
+  '/configuracoes': typeof AppConfiguracoesRoute
   '/cronometro': typeof AppCronometroRoute
   '/dashboard': typeof AppDashboardRoute
   '/email': typeof AppEmailRoute
@@ -330,6 +338,7 @@ export interface FileRoutesById {
   '/_app/ai': typeof AppAiRouteWithChildren
   '/_app/apps': typeof AppAppsRoute
   '/_app/atalhos': typeof AppAtalhosRoute
+  '/_app/configuracoes': typeof AppConfiguracoesRoute
   '/_app/cronometro': typeof AppCronometroRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/drive': typeof AppDriveRouteWithChildren
@@ -372,6 +381,7 @@ export interface FileRouteTypes {
     | '/ai'
     | '/apps'
     | '/atalhos'
+    | '/configuracoes'
     | '/cronometro'
     | '/dashboard'
     | '/drive'
@@ -411,6 +421,7 @@ export interface FileRouteTypes {
     | '/activity'
     | '/apps'
     | '/atalhos'
+    | '/configuracoes'
     | '/cronometro'
     | '/dashboard'
     | '/email'
@@ -449,6 +460,7 @@ export interface FileRouteTypes {
     | '/_app/ai'
     | '/_app/apps'
     | '/_app/atalhos'
+    | '/_app/configuracoes'
     | '/_app/cronometro'
     | '/_app/dashboard'
     | '/_app/drive'
@@ -642,6 +654,13 @@ declare module '@tanstack/react-router' {
       path: '/cronometro'
       fullPath: '/cronometro'
       preLoaderRoute: typeof AppCronometroRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/configuracoes': {
+      id: '/_app/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AppConfiguracoesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/atalhos': {
@@ -840,6 +859,7 @@ interface AppRouteChildren {
   AppAiRoute: typeof AppAiRouteWithChildren
   AppAppsRoute: typeof AppAppsRoute
   AppAtalhosRoute: typeof AppAtalhosRoute
+  AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppCronometroRoute: typeof AppCronometroRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppDriveRoute: typeof AppDriveRouteWithChildren
@@ -860,6 +880,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAiRoute: AppAiRouteWithChildren,
   AppAppsRoute: AppAppsRoute,
   AppAtalhosRoute: AppAtalhosRoute,
+  AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppCronometroRoute: AppCronometroRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppDriveRoute: AppDriveRouteWithChildren,

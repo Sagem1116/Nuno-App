@@ -26,6 +26,7 @@ const stripHtml = (s: string): string => {
 };
 import { exportTable, importTable } from "@/lib/data-io";
 import { AutoExportMenu } from "@/components/auto-export-menu";
+import { DangerZone, deleteAllForUser } from "@/components/danger-zone";
 
 export const Route = createFileRoute("/_app/notas")({
   component: NotesPage,
@@ -305,6 +306,19 @@ function NotesPage() {
           counts={tagCounts(notes)}
           onClose={() => setTagManagerOpen(false)}
           onChanged={load}
+        />
+      )}
+
+      {user && (
+        <DangerZone
+          title="Apagar todas as notas"
+          description="Remove permanentemente todas as notas (incluindo favoritos e tags)."
+          confirmText="APAGAR NOTAS"
+          onConfirm={async () => {
+            const n = await deleteAllForUser(supabase, user.id, ["notes"]);
+            await load();
+            return { count: n };
+          }}
         />
       )}
     </div>

@@ -10,6 +10,7 @@ import {
 } from "./_app.notas";
 import { TagInput } from "@/components/tag-input";
 import { exportTable, importTable } from "@/lib/data-io";
+import { DangerZone, deleteAllForUser } from "@/components/danger-zone";
 
 export const Route = createFileRoute("/_app/links")({
   component: LinksPage,
@@ -304,6 +305,19 @@ function LinksPage() {
           counts={tagCounts(links)}
           onClose={() => setTagManagerOpen(false)}
           onChanged={load}
+        />
+      )}
+
+      {user && (
+        <DangerZone
+          title="Apagar todos os links"
+          description="Remove permanentemente todos os links guardados (incluindo favoritos e tags)."
+          confirmText="APAGAR LINKS"
+          onConfirm={async () => {
+            const n = await deleteAllForUser(supabase, user.id, ["links"]);
+            await load();
+            return { count: n };
+          }}
         />
       )}
     </div>
