@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft, Plus, X, Trash2, MapPin, Calendar as CalIcon, Wallet,
   ListChecks, Link2, Lightbulb, ExternalLink, Pencil, Map, Activity,
-  Coffee, Truck, FileText, Plane, Globe,
+  Coffee, Truck, FileText, Plane, Globe, Download,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
