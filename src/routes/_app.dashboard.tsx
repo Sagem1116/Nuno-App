@@ -402,9 +402,8 @@ function Dashboard() {
         </Panel>
       </div>
 
-      <CollapsibleNotifications />
 
-      <BackupsPanel userId={user?.id} />
+
 
       <section className="glass-card overflow-hidden">
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
