@@ -170,10 +170,23 @@ function TripsIndexPage() {
             ].join(" ")}>{l}</button>
           ))}
         </div>
-        <button onClick={() => { setEditing(null); setOpen(true); }}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-medium text-sm hover:shadow-glow-strong transition-all">
-          <Plus className="h-4 w-4" /> Nova viagem
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => exportAllTrips()}
+            className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg bg-input border border-border text-xs hover:border-primary/50"
+            title="Exporta todas as viagens (com overview, itinerário, reservas, documentos e despesas)">
+            <Download className="h-3.5 w-3.5" /> Exportar todas
+          </button>
+          <button onClick={async () => { if (user) { await importTripsFromFile(user.id); await load(); } }}
+            disabled={!user}
+            className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg bg-input border border-border text-xs hover:border-primary/50 disabled:opacity-50"
+            title="Importa uma ou várias viagens a partir de um ficheiro JSON">
+            <Upload className="h-3.5 w-3.5" /> Importar viagens
+          </button>
+          <button onClick={() => { setEditing(null); setOpen(true); }}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-medium text-sm hover:shadow-glow-strong transition-all">
+            <Plus className="h-4 w-4" /> Nova viagem
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3">
