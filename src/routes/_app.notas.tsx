@@ -26,6 +26,7 @@ const stripHtml = (s: string): string => {
 };
 import { exportTable, importTable } from "@/lib/data-io";
 import { AutoExportMenu } from "@/components/auto-export-menu";
+import { DangerZone, deleteAllForUser } from "@/components/danger-zone";
 
 export const Route = createFileRoute("/_app/notas")({
   component: NotesPage,
