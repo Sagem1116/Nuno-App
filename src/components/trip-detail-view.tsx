@@ -14,6 +14,7 @@ import { BUCKET, getSignedUrl } from "@/lib/drive";
 import { TripDialog, type Trip } from "@/routes/_app.viagens";
 import { TravelAssistant } from "@/components/travel-assistant";
 import { ShareTripButton } from "@/components/share-trip-button";
+import { exportTrip, importTripsFromFile } from "@/lib/data-io";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 type TripDialogData = Parameters<Parameters<typeof TripDialog>[0]["onSave"]>[0];
