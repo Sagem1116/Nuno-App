@@ -1,12 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Plus, X, Trash2, Plane, MapPin, Calendar as CalIcon, Wallet, Globe, Image, CheckCircle2, Search, Filter } from "lucide-react";
+import { Plus, X, Trash2, Plane, MapPin, Calendar as CalIcon, Wallet, Globe, Image, CheckCircle2, Search, Filter, Download, Upload } from "lucide-react";
 import { format, parseISO, isAfter, isBefore } from "date-fns";
 import { pt } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Field, inputCls, EmptyState } from "./_app.notas";
 import { Trip, TripDialog } from "./_app.viagens";
+import { exportAllTrips, importTripsFromFile } from "@/lib/data-io";
 
 export const Route = createFileRoute("/_app/viagens/")({
   component: TripsIndexPage,
