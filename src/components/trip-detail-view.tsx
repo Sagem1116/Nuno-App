@@ -393,14 +393,24 @@ export function TripDetailView({ tripId, effectiveUserId, isPublic, backHref }: 
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {!isPublic && (
-              <ShareTripButton
-                tripId={trip.id}
-                initialSlug={(trip as any).public_slug ?? null}
-                initialPublic={!!(trip as any).is_public}
-                onChange={({ slug, isPublic: pub }) =>
-                  setTrip((currentTrip) => (currentTrip ? ({ ...currentTrip, public_slug: slug, is_public: pub } as any) : currentTrip))
-                }
-              />
+              <>
+                <ShareTripButton
+                  tripId={trip.id}
+                  initialSlug={(trip as any).public_slug ?? null}
+                  initialPublic={!!(trip as any).is_public}
+                  onChange={({ slug, isPublic: pub }) =>
+                    setTrip((currentTrip) => (currentTrip ? ({ ...currentTrip, public_slug: slug, is_public: pub } as any) : currentTrip))
+                  }
+                />
+                <button onClick={() => exportTrip(trip.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
+                  title="Exporta esta viagem (overview, itinerário, reservas, documentos e despesas)">
+                  <Download className="h-3.5 w-3.5" /> Exportar
+                </button>
+                <button onClick={async () => { await importTripsFromFile(userId); await load(); }} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
+                  title="Importa uma viagem a partir de um ficheiro JSON">
+                  Importar
+                </button>
+              </>
             )}
             <button onClick={() => setEditOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary">
               <Pencil className="h-3.5 w-3.5" /> Editar viagem
