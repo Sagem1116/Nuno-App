@@ -675,6 +675,22 @@ export async function importAllCombined(userId: string): Promise<void> {
       })
       .filter((r) => allowed.some((k) => r[k] !== undefined));
     if (!rows.length) return 0;
+    const { rows: toInsert } = await filterExistingRows(table, rows, userId);
+    if (!toInsert.length) return 0;
+    const { error } = await (supabase as any).from(table).insert(toInsert);
+    if (error) { errors.push(`${table}: ${error.message}`); return 0; }
+    return toInsert.length;
+  };
+    const allowed = ALLOWED_FIELDS[table];
+    if (!allowed?.length) return 0;
+    const rows = (items ?? [])
+      .map((it) => {
+        const row: Record<string, unknown> = { user_id: userId };
+        for (const k of allowed) if (it[k] !== undefined && it[k] !== null) row[k] = it[k];
+        return row;
+      })
+      .filter((r) => allowed.some((k) => r[k] !== undefined));
+    if (!rows.length) return 0;
     const { error } = await (supabase as any).from(table).insert(rows);
     if (error) { errors.push(`${table}: ${error.message}`); return 0; }
     return rows.length;
