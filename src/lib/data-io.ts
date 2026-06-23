@@ -867,9 +867,15 @@ export async function exportAllTrips(opts?: { silent?: boolean }): Promise<strin
 // Insert one trip bundle into the target account. New ids are generated for
 // trip / day / itinerary_item / attachment so the import is non-destructive
 // (running twice creates duplicates). Public sharing fields are stripped.
-async function insertTripBundle(userId: string, bundle: any): Promise<{ ok: boolean; error?: string; tripId?: string }> {
+async function insertTripBundle(userId: string, bundle: any): Promise<{ ok: boolean; error?: string; tripId?: string; skipped?: boolean }> {
   if (!bundle?.trip) return { ok: false, error: "Sem dados de viagem" };
   const { id: _oldId, user_id: _u, created_at: _c, updated_at: _up, public_slug: _ps, is_public: _ip, ...tripRest } = bundle.trip;
+  // Skip if a trip with the same name + dates already exists for this user.
+  const tripKey = `${_norm(tripRest.name)}|${_ts(tripRest.start_date)}|${_ts(tripRest.end_date)}`;
+  const { data: existingTrips } = await (supabase as any)
+    .from("trips").select("name,start_date,end_date").eq("user_id", userId);
+  const seen = new Set<string>((existingTrips ?? []).map((t: any) => `${_norm(t.name)}|${_ts(t.start_date)}|${_ts(t.end_date)}`));
+  if (seen.has(tripKey)) return { ok: true, skipped: true };
   const { data: newTrip, error: tErr } = await (supabase as any).from("trips").insert({ ...tripRest, user_id: userId, public_slug: null, is_public: false }).select("id").single();
   if (tErr || !newTrip) return { ok: false, error: tErr?.message ?? "Falha ao criar viagem" };
   const newTripId = newTrip.id as string;
