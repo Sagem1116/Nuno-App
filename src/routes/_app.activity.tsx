@@ -163,30 +163,56 @@ function ActivityPage() {
 
 // ---------- Dashboard ----------
 
-function AppWindowsRow({ app, total, windows }: { app: string; total: number; windows: { title: string; seconds: number }[] }) {
+function CatBadge({ id, seconds, cats }: { id: string; seconds: number; cats: Category[] }) {
+  if (id === "__none__") {
+    return <Badge variant="outline" className="text-muted-foreground">Não classificado · {fmtDuration(seconds)}</Badge>;
+  }
+  const c = cats.find(x => x.id === id);
+  const parent = c?.parent_id ? cats.find(p => p.id === c.parent_id) : null;
+  const label = parent ? `${parent.name} → ${c?.name}` : (c?.name ?? "—");
+  return <Badge style={{ backgroundColor: c?.color ?? "#666", color: "white" }}>{label} · {fmtDuration(seconds)}</Badge>;
+}
+
+function AppDetailRow({ app, total, byCat, windows, maxTotal, cats }: {
+  app: string; total: number;
+  byCat: { id: string; seconds: number }[];
+  windows: { title: string; seconds: number; byCat: { id: string; seconds: number }[] }[];
+  maxTotal: number; cats: Category[];
+}) {
   const [open, setOpen] = useState(false);
-  const max = windows[0]?.seconds || 1;
+  const maxW = windows[0]?.seconds || 1;
   return (
     <div className="rounded border border-border">
-      <button type="button" onClick={() => setOpen(v => !v)} className="w-full flex items-center justify-between px-3 py-2 hover:bg-accent/40 text-left">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs text-muted-foreground w-4">{open ? "▾" : "▸"}</span>
-          <span className="font-medium truncate">{app}</span>
-          <span className="text-xs text-muted-foreground">({windows.length} {windows.length === 1 ? "janela" : "janelas"})</span>
+      <button type="button" onClick={() => setOpen(v => !v)} className="w-full px-3 py-2 hover:bg-accent/40 text-left">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs text-muted-foreground w-4">{open ? "▾" : "▸"}</span>
+            <span className="font-medium truncate">{app}</span>
+            <span className="text-xs text-muted-foreground">({windows.length} {windows.length === 1 ? "janela" : "janelas"})</span>
+          </div>
+          <span className="text-sm tabular-nums">{fmtDuration(total)}</span>
         </div>
-        <span className="text-sm tabular-nums">{fmtDuration(total)}</span>
+        <div className="h-1 bg-muted rounded overflow-hidden mt-1">
+          <div className="h-full bg-primary" style={{ width: `${(total / maxTotal) * 100}%` }} />
+        </div>
+        <div className="flex flex-wrap gap-1 mt-2">
+          {byCat.map(b => <CatBadge key={b.id} id={b.id} seconds={b.seconds} cats={cats} />)}
+        </div>
       </button>
       {open && (
-        <div className="px-3 pb-2 pt-1 space-y-1 border-t border-border/60">
+        <div className="px-3 pb-2 pt-1 space-y-2 border-t border-border/60">
           {windows.map((w, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs">
-              <div className="flex-1 min-w-0">
-                <div className="truncate" title={w.title}>{w.title}</div>
-                <div className="h-1 bg-muted rounded overflow-hidden mt-0.5">
-                  <div className="h-full bg-primary" style={{ width: `${(w.seconds / max) * 100}%` }} />
-                </div>
+            <div key={i} className="text-xs space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0 truncate" title={w.title}>{w.title}</div>
+                <span className="tabular-nums text-muted-foreground w-14 text-right">{fmtDuration(w.seconds)}</span>
               </div>
-              <span className="tabular-nums text-muted-foreground w-14 text-right">{fmtDuration(w.seconds)}</span>
+              <div className="h-1 bg-muted rounded overflow-hidden">
+                <div className="h-full bg-primary" style={{ width: `${(w.seconds / maxW) * 100}%` }} />
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {w.byCat.map(b => <CatBadge key={b.id} id={b.id} seconds={b.seconds} cats={cats} />)}
+              </div>
             </div>
           ))}
         </div>
@@ -194,6 +220,7 @@ function AppWindowsRow({ app, total, windows }: { app: string; total: number; wi
     </div>
   );
 }
+
 
 function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; projs: Project[] }) {
   const [period, setPeriod] = useState<string>("30");
@@ -297,38 +324,45 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     }).sort((a, b) => b.value - a.value);
   }, [filtered, projs]);
 
-  const byApp = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const l of filtered) m.set(l.app_name || "—", (m.get(l.app_name || "—") ?? 0) + l.duration_seconds);
-    return Array.from(m.entries())
-      .map(([name, sec]) => ({ name, seconds: sec }))
-      .sort((a, b) => b.seconds - a.seconds)
-      .slice(0, 10);
-  }, [filtered]);
-
-  // Top windows per app: { app, total, windows: [{title, seconds}] }
-  const byAppWindows = useMemo(() => {
-    const apps = new Map<string, { total: number; windows: Map<string, number> }>();
+  // Top apps with per-category breakdown and top windows (each with category breakdown)
+  const byAppDetailed = useMemo(() => {
+    const apps = new Map<string, {
+      total: number;
+      byCat: Map<string, number>;
+      windows: Map<string, { total: number; byCat: Map<string, number> }>;
+    }>();
     for (const l of filtered) {
       const app = l.app_name || "—";
-      const a = apps.get(app) ?? { total: 0, windows: new Map() };
+      const a = apps.get(app) ?? { total: 0, byCat: new Map(), windows: new Map() };
       a.total += l.duration_seconds;
-      const t = l.window_title || "(sem título)";
-      a.windows.set(t, (a.windows.get(t) ?? 0) + l.duration_seconds);
+      const catKey = l.category_id ?? "__none__";
+      a.byCat.set(catKey, (a.byCat.get(catKey) ?? 0) + l.duration_seconds);
+      const wt = l.window_title || "(sem título)";
+      const w = a.windows.get(wt) ?? { total: 0, byCat: new Map() };
+      w.total += l.duration_seconds;
+      w.byCat.set(catKey, (w.byCat.get(catKey) ?? 0) + l.duration_seconds);
+      a.windows.set(wt, w);
       apps.set(app, a);
     }
     return Array.from(apps.entries())
       .map(([app, v]) => ({
         app,
         total: v.total,
+        byCat: Array.from(v.byCat.entries()).map(([id, s]) => ({ id, seconds: s })).sort((a, b) => b.seconds - a.seconds),
         windows: Array.from(v.windows.entries())
-          .map(([title, seconds]) => ({ title, seconds }))
+          .map(([title, w]) => ({
+            title,
+            seconds: w.total,
+            byCat: Array.from(w.byCat.entries()).map(([id, s]) => ({ id, seconds: s })).sort((a, b) => b.seconds - a.seconds),
+          }))
           .sort((a, b) => b.seconds - a.seconds)
           .slice(0, 10),
       }))
       .sort((a, b) => b.total - a.total)
-      .slice(0, 8);
+      .slice(0, 10);
   }, [filtered]);
+  const maxAppTotal = byAppDetailed[0]?.total || 1;
+
 
   const timeline = useMemo(() => {
     const m = new Map<string, number>();
@@ -450,26 +484,15 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
         </Card>
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle className="text-base">Top aplicações</CardTitle></CardHeader>
-          <CardContent style={{ height: 320 }}>
-            <ResponsiveContainer>
-              <BarChart data={byApp} layout="vertical" margin={{ left: 80 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" stroke="var(--muted-foreground)" tickFormatter={(v: number) => fmtDuration(v)} />
-                <YAxis type="category" dataKey="name" stroke="var(--muted-foreground)" width={140} />
-                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} formatter={(value: number) => fmtDuration(value)} />
-                <Bar dataKey="seconds" fill="var(--primary)" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-        <Card className="lg:col-span-2">
-          <CardHeader><CardTitle className="text-base">Top janelas por aplicação</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            {byAppWindows.length === 0 ? (
+            {byAppDetailed.length === 0 ? (
               <div className="text-sm text-muted-foreground">Sem dados.</div>
-            ) : byAppWindows.map(a => <AppWindowsRow key={a.app} app={a.app} total={a.total} windows={a.windows} />)}
+            ) : byAppDetailed.map(a => (
+              <AppDetailRow key={a.app} app={a.app} total={a.total} byCat={a.byCat} windows={a.windows} maxTotal={maxAppTotal} cats={cats} />
+            ))}
           </CardContent>
         </Card>
+
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle className="text-base">Horas por projeto</CardTitle></CardHeader>
           <CardContent style={{ height: 280 }}>
@@ -714,6 +737,24 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
   const [pattern, setPattern] = useState("");
   const [catId, setCatId] = useState("");
   const [projId, setProjId] = useState("");
+  const [parentFilter, setParentFilter] = useState<string>("all");
+  const [subFilter, setSubFilter] = useState<string>("all");
+  const parents = useMemo(() => cats.filter(c => !c.parent_id), [cats]);
+  const subsOfSelected = useMemo(
+    () => (parentFilter === "all" || parentFilter === "none" ? [] : cats.filter(c => c.parent_id === parentFilter)),
+    [cats, parentFilter]
+  );
+  const filteredRules = useMemo(() => {
+    if (parentFilter === "all") return rules;
+    if (parentFilter === "none") return rules.filter(r => !r.category_id);
+    const subIds = new Set(cats.filter(c => c.parent_id === parentFilter).map(c => c.id));
+    return rules.filter(r => {
+      if (!r.category_id) return false;
+      if (subFilter !== "all") return r.category_id === subFilter;
+      return r.category_id === parentFilter || subIds.has(r.category_id);
+    });
+  }, [rules, cats, parentFilter, subFilter]);
+
 
   async function add() {
     if (!pattern.trim() || !catId) { toast.error("Preenche padrão e categoria"); return; }
@@ -806,13 +847,34 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={parentFilter} onValueChange={(v) => { setParentFilter(v); setSubFilter("all"); }}>
+            <SelectTrigger className="w-52"><SelectValue placeholder="Categoria" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as categorias</SelectItem>
+              <SelectItem value="none">Sem categoria</SelectItem>
+              {parents.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {subsOfSelected.length > 0 && (
+            <Select value={subFilter} onValueChange={setSubFilter}>
+              <SelectTrigger className="w-52"><SelectValue placeholder="Subcategoria" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as subcategorias</SelectItem>
+                {subsOfSelected.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          <span className="text-xs text-muted-foreground">{filteredRules.length} de {rules.length} regra(s)</span>
+        </div>
         <Button variant="outline" size="sm" onClick={reapplyAll}><Wand2 className="h-4 w-4 mr-1" /> Re-aplicar regras a todos</Button>
       </div>
 
       <div className="space-y-2">
-        {rules.map(r => {
+        {filteredRules.map(r => {
           const c = cats.find(x => x.id === r.category_id);
+          const parent = c?.parent_id ? cats.find(x => x.id === c.parent_id) : null;
           const p = projs.find(x => x.id === r.project_id);
           return (
             <Card key={r.id}>
@@ -821,6 +883,8 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
                   <Badge variant="outline">{r.rule_type === "app_name" ? "App" : "Título contém"}</Badge>
                   <code className="text-sm">{r.pattern}</code>
                   <span className="text-muted-foreground">→</span>
+                  {parent && <Badge variant="outline" style={{ borderColor: parent.color, color: parent.color }}>{parent.name}</Badge>}
+                  {parent && c && <span className="text-muted-foreground text-xs">›</span>}
                   {c && <Badge style={{ backgroundColor: c.color, color: "white" }}>{c.name}</Badge>}
                   {p && <Badge variant="secondary">{p.name}</Badge>}
                 </div>
@@ -829,8 +893,9 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
             </Card>
           );
         })}
-        {!rules.length && <div className="text-sm text-muted-foreground">Sem regras. Adiciona uma ou cria a partir da aba "Não classificados".</div>}
+        {!filteredRules.length && <div className="text-sm text-muted-foreground">{rules.length ? "Nenhuma regra corresponde ao filtro." : "Sem regras. Adiciona uma ou cria a partir da aba \"Não classificados\"."}</div>}
       </div>
+
     </div>
   );
 }
@@ -1064,7 +1129,7 @@ type SortKey = "when" | "app" | "category" | "project" | "duration";
 type SortDir = "asc" | "desc";
 
 function ClassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string; allLogs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
-  const [scope, setScope] = useState<"7d" | "30d" | "all">("7d");
+  const [scope, setScope] = useState<"today" | "yesterday" | "7d" | "30d" | "all">("7d");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [projFilter, setProjFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -1081,11 +1146,18 @@ function ClassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string; 
 
   const filtered = useMemo(() => {
     let arr = allLogs.filter(l => l.category_id);
-    if (scope !== "all") {
+    if (scope === "today" || scope === "yesterday") {
+      const now = new Date();
+      const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const from = scope === "today" ? startToday : startToday - 86400_000;
+      const to = scope === "today" ? startToday + 86400_000 : startToday;
+      arr = arr.filter(l => { const t = new Date(l.start_time).getTime(); return t >= from && t < to; });
+    } else if (scope !== "all") {
       const days = scope === "7d" ? 7 : 30;
       const cutoff = Date.now() - days * 86400_000;
       arr = arr.filter(l => new Date(l.start_time).getTime() >= cutoff);
     }
+
     if (catFilter !== "all") arr = arr.filter(l => l.category_id === catFilter);
     if (projFilter !== "all") arr = arr.filter(l => (l.project_id ?? "__none__") === projFilter);
     const q = search.trim().toLowerCase();
@@ -1162,8 +1234,11 @@ function ClassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string; 
         <Select value={scope} onValueChange={(v) => { setScope(v as any); setVisibleCount(50); }}>
           <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="today">Hoje</SelectItem>
+            <SelectItem value="yesterday">Ontem</SelectItem>
             <SelectItem value="7d">Últimos 7 dias</SelectItem>
             <SelectItem value="30d">Últimos 30 dias</SelectItem>
+
             <SelectItem value="all">Tudo</SelectItem>
           </SelectContent>
         </Select>
