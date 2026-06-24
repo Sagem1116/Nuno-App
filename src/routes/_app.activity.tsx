@@ -324,38 +324,45 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     }).sort((a, b) => b.value - a.value);
   }, [filtered, projs]);
 
-  const byApp = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const l of filtered) m.set(l.app_name || "—", (m.get(l.app_name || "—") ?? 0) + l.duration_seconds);
-    return Array.from(m.entries())
-      .map(([name, sec]) => ({ name, seconds: sec }))
-      .sort((a, b) => b.seconds - a.seconds)
-      .slice(0, 10);
-  }, [filtered]);
-
-  // Top windows per app: { app, total, windows: [{title, seconds}] }
-  const byAppWindows = useMemo(() => {
-    const apps = new Map<string, { total: number; windows: Map<string, number> }>();
+  // Top apps with per-category breakdown and top windows (each with category breakdown)
+  const byAppDetailed = useMemo(() => {
+    const apps = new Map<string, {
+      total: number;
+      byCat: Map<string, number>;
+      windows: Map<string, { total: number; byCat: Map<string, number> }>;
+    }>();
     for (const l of filtered) {
       const app = l.app_name || "—";
-      const a = apps.get(app) ?? { total: 0, windows: new Map() };
+      const a = apps.get(app) ?? { total: 0, byCat: new Map(), windows: new Map() };
       a.total += l.duration_seconds;
-      const t = l.window_title || "(sem título)";
-      a.windows.set(t, (a.windows.get(t) ?? 0) + l.duration_seconds);
+      const catKey = l.category_id ?? "__none__";
+      a.byCat.set(catKey, (a.byCat.get(catKey) ?? 0) + l.duration_seconds);
+      const wt = l.window_title || "(sem título)";
+      const w = a.windows.get(wt) ?? { total: 0, byCat: new Map() };
+      w.total += l.duration_seconds;
+      w.byCat.set(catKey, (w.byCat.get(catKey) ?? 0) + l.duration_seconds);
+      a.windows.set(wt, w);
       apps.set(app, a);
     }
     return Array.from(apps.entries())
       .map(([app, v]) => ({
         app,
         total: v.total,
+        byCat: Array.from(v.byCat.entries()).map(([id, s]) => ({ id, seconds: s })).sort((a, b) => b.seconds - a.seconds),
         windows: Array.from(v.windows.entries())
-          .map(([title, seconds]) => ({ title, seconds }))
+          .map(([title, w]) => ({
+            title,
+            seconds: w.total,
+            byCat: Array.from(w.byCat.entries()).map(([id, s]) => ({ id, seconds: s })).sort((a, b) => b.seconds - a.seconds),
+          }))
           .sort((a, b) => b.seconds - a.seconds)
           .slice(0, 10),
       }))
       .sort((a, b) => b.total - a.total)
-      .slice(0, 8);
+      .slice(0, 10);
   }, [filtered]);
+  const maxAppTotal = byAppDetailed[0]?.total || 1;
+
 
   const timeline = useMemo(() => {
     const m = new Map<string, number>();
