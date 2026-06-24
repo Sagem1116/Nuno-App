@@ -321,8 +321,16 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             <SelectItem value="30">Últimos 30 dias</SelectItem>
             <SelectItem value="90">Últimos 90 dias</SelectItem>
             <SelectItem value="365">Último ano</SelectItem>
+            <SelectItem value="custom">Personalizado…</SelectItem>
           </SelectContent>
         </Select>
+        {period === "custom" && (
+          <div className="flex items-center gap-1 text-xs">
+            <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-9 w-[150px]" />
+            <span className="text-muted-foreground">→</span>
+            <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-9 w-[150px]" />
+          </div>
+        )}
         <Select value={parentCatFilter} onValueChange={(v) => { setParentCatFilter(v); setSubCatFilter("all"); }}>
           <SelectTrigger className="w-48"><SelectValue placeholder="Categoria" /></SelectTrigger>
           <SelectContent>
