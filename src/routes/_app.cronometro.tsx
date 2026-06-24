@@ -91,9 +91,10 @@ function fromLocalInput(s: string) {
   return new Date(s).getTime();
 }
 
-type Period = "day" | "week" | "month";
+type Period = "day" | "week" | "month" | "all";
 
 function periodStart(p: Period, ref = new Date()) {
+  if (p === "all") return 0;
   const d = new Date(ref);
   d.setHours(0, 0, 0, 0);
   if (p === "day") return d.getTime();
@@ -106,6 +107,7 @@ function periodStart(p: Period, ref = new Date()) {
   return d.getTime();
 }
 function periodEnd(p: Period, ref = new Date()) {
+  if (p === "all") return Number.MAX_SAFE_INTEGER;
   const d = new Date(periodStart(p, ref));
   if (p === "day") d.setDate(d.getDate() + 1);
   else if (p === "week") d.setDate(d.getDate() + 7);
