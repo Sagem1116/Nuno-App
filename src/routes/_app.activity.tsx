@@ -1087,7 +1087,7 @@ type SortKey = "when" | "app" | "category" | "project" | "duration";
 type SortDir = "asc" | "desc";
 
 function ClassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string; allLogs: Log[]; cats: Category[]; projs: Project[]; onChanged: () => void }) {
-  const [scope, setScope] = useState<"7d" | "30d" | "all">("7d");
+  const [scope, setScope] = useState<"today" | "yesterday" | "7d" | "30d" | "all">("7d");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [projFilter, setProjFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
