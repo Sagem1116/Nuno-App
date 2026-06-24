@@ -847,13 +847,34 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={parentFilter} onValueChange={(v) => { setParentFilter(v); setSubFilter("all"); }}>
+            <SelectTrigger className="w-52"><SelectValue placeholder="Categoria" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as categorias</SelectItem>
+              <SelectItem value="none">Sem categoria</SelectItem>
+              {parents.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {subsOfSelected.length > 0 && (
+            <Select value={subFilter} onValueChange={setSubFilter}>
+              <SelectTrigger className="w-52"><SelectValue placeholder="Subcategoria" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as subcategorias</SelectItem>
+                {subsOfSelected.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          <span className="text-xs text-muted-foreground">{filteredRules.length} de {rules.length} regra(s)</span>
+        </div>
         <Button variant="outline" size="sm" onClick={reapplyAll}><Wand2 className="h-4 w-4 mr-1" /> Re-aplicar regras a todos</Button>
       </div>
 
       <div className="space-y-2">
-        {rules.map(r => {
+        {filteredRules.map(r => {
           const c = cats.find(x => x.id === r.category_id);
+          const parent = c?.parent_id ? cats.find(x => x.id === c.parent_id) : null;
           const p = projs.find(x => x.id === r.project_id);
           return (
             <Card key={r.id}>
@@ -862,6 +883,8 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
                   <Badge variant="outline">{r.rule_type === "app_name" ? "App" : "Título contém"}</Badge>
                   <code className="text-sm">{r.pattern}</code>
                   <span className="text-muted-foreground">→</span>
+                  {parent && <Badge variant="outline" style={{ borderColor: parent.color, color: parent.color }}>{parent.name}</Badge>}
+                  {parent && c && <span className="text-muted-foreground text-xs">›</span>}
                   {c && <Badge style={{ backgroundColor: c.color, color: "white" }}>{c.name}</Badge>}
                   {p && <Badge variant="secondary">{p.name}</Badge>}
                 </div>
@@ -870,8 +893,9 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
             </Card>
           );
         })}
-        {!rules.length && <div className="text-sm text-muted-foreground">Sem regras. Adiciona uma ou cria a partir da aba "Não classificados".</div>}
+        {!filteredRules.length && <div className="text-sm text-muted-foreground">{rules.length ? "Nenhuma regra corresponde ao filtro." : "Sem regras. Adiciona uma ou cria a partir da aba \"Não classificados\"."}</div>}
       </div>
+
     </div>
   );
 }
