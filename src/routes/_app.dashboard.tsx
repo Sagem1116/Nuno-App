@@ -353,10 +353,10 @@ function Dashboard() {
         <Kpi
           to="/financas"
           icon={Wallet}
-          label={`Saldo pessoal · ${periodFilter === "all" ? format(today, "MMM", { locale: pt }) : periodFilter === "today" ? "Hoje" : "Ontem"}`}
-          value={fmtEur(monthStats.personal)}
-          sub={`${fmtEur(monthStats.income)} · -${fmtEur(monthStats.expense)}${monthStats.savings !== 0 ? ` · poupanças ${fmtEur(monthStats.savings)}` : ""}`}
-          tone={monthStats.personal >= 0 ? "good" : "bad"}
+          label="Saldo total"
+          value={fmtEur(totalStats.balance)}
+          sub={totalStats.savings !== 0 ? `${fmtEur(totalStats.savings)} em poupanças` : "—"}
+          tone={totalStats.balance >= 0 ? "good" : "bad"}
         />
         <Kpi
           to="/viagens"
