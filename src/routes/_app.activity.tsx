@@ -163,30 +163,56 @@ function ActivityPage() {
 
 // ---------- Dashboard ----------
 
-function AppWindowsRow({ app, total, windows }: { app: string; total: number; windows: { title: string; seconds: number }[] }) {
+function CatBadge({ id, seconds, cats }: { id: string; seconds: number; cats: Category[] }) {
+  if (id === "__none__") {
+    return <Badge variant="outline" className="text-muted-foreground">Não classificado · {fmtDuration(seconds)}</Badge>;
+  }
+  const c = cats.find(x => x.id === id);
+  const parent = c?.parent_id ? cats.find(p => p.id === c.parent_id) : null;
+  const label = parent ? `${parent.name} → ${c?.name}` : (c?.name ?? "—");
+  return <Badge style={{ backgroundColor: c?.color ?? "#666", color: "white" }}>{label} · {fmtDuration(seconds)}</Badge>;
+}
+
+function AppDetailRow({ app, total, byCat, windows, maxTotal, cats }: {
+  app: string; total: number;
+  byCat: { id: string; seconds: number }[];
+  windows: { title: string; seconds: number; byCat: { id: string; seconds: number }[] }[];
+  maxTotal: number; cats: Category[];
+}) {
   const [open, setOpen] = useState(false);
-  const max = windows[0]?.seconds || 1;
+  const maxW = windows[0]?.seconds || 1;
   return (
     <div className="rounded border border-border">
-      <button type="button" onClick={() => setOpen(v => !v)} className="w-full flex items-center justify-between px-3 py-2 hover:bg-accent/40 text-left">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs text-muted-foreground w-4">{open ? "▾" : "▸"}</span>
-          <span className="font-medium truncate">{app}</span>
-          <span className="text-xs text-muted-foreground">({windows.length} {windows.length === 1 ? "janela" : "janelas"})</span>
+      <button type="button" onClick={() => setOpen(v => !v)} className="w-full px-3 py-2 hover:bg-accent/40 text-left">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs text-muted-foreground w-4">{open ? "▾" : "▸"}</span>
+            <span className="font-medium truncate">{app}</span>
+            <span className="text-xs text-muted-foreground">({windows.length} {windows.length === 1 ? "janela" : "janelas"})</span>
+          </div>
+          <span className="text-sm tabular-nums">{fmtDuration(total)}</span>
         </div>
-        <span className="text-sm tabular-nums">{fmtDuration(total)}</span>
+        <div className="h-1 bg-muted rounded overflow-hidden mt-1">
+          <div className="h-full bg-primary" style={{ width: `${(total / maxTotal) * 100}%` }} />
+        </div>
+        <div className="flex flex-wrap gap-1 mt-2">
+          {byCat.map(b => <CatBadge key={b.id} id={b.id} seconds={b.seconds} cats={cats} />)}
+        </div>
       </button>
       {open && (
-        <div className="px-3 pb-2 pt-1 space-y-1 border-t border-border/60">
+        <div className="px-3 pb-2 pt-1 space-y-2 border-t border-border/60">
           {windows.map((w, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs">
-              <div className="flex-1 min-w-0">
-                <div className="truncate" title={w.title}>{w.title}</div>
-                <div className="h-1 bg-muted rounded overflow-hidden mt-0.5">
-                  <div className="h-full bg-primary" style={{ width: `${(w.seconds / max) * 100}%` }} />
-                </div>
+            <div key={i} className="text-xs space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0 truncate" title={w.title}>{w.title}</div>
+                <span className="tabular-nums text-muted-foreground w-14 text-right">{fmtDuration(w.seconds)}</span>
               </div>
-              <span className="tabular-nums text-muted-foreground w-14 text-right">{fmtDuration(w.seconds)}</span>
+              <div className="h-1 bg-muted rounded overflow-hidden">
+                <div className="h-full bg-primary" style={{ width: `${(w.seconds / maxW) * 100}%` }} />
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {w.byCat.map(b => <CatBadge key={b.id} id={b.id} seconds={b.seconds} cats={cats} />)}
+              </div>
             </div>
           ))}
         </div>
@@ -194,6 +220,7 @@ function AppWindowsRow({ app, total, windows }: { app: string; total: number; wi
     </div>
   );
 }
+
 
 function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; projs: Project[] }) {
   const [period, setPeriod] = useState<string>("30");
