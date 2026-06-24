@@ -163,11 +163,47 @@ function ActivityPage() {
 
 // ---------- Dashboard ----------
 
+function AppWindowsRow({ app, total, windows }: { app: string; total: number; windows: { title: string; seconds: number }[] }) {
+  const [open, setOpen] = useState(false);
+  const max = windows[0]?.seconds || 1;
+  return (
+    <div className="rounded border border-border">
+      <button type="button" onClick={() => setOpen(v => !v)} className="w-full flex items-center justify-between px-3 py-2 hover:bg-accent/40 text-left">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs text-muted-foreground w-4">{open ? "▾" : "▸"}</span>
+          <span className="font-medium truncate">{app}</span>
+          <span className="text-xs text-muted-foreground">({windows.length} {windows.length === 1 ? "janela" : "janelas"})</span>
+        </div>
+        <span className="text-sm tabular-nums">{fmtDuration(total)}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-2 pt-1 space-y-1 border-t border-border/60">
+          {windows.map((w, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              <div className="flex-1 min-w-0">
+                <div className="truncate" title={w.title}>{w.title}</div>
+                <div className="h-1 bg-muted rounded overflow-hidden mt-0.5">
+                  <div className="h-full bg-primary" style={{ width: `${(w.seconds / max) * 100}%` }} />
+                </div>
+              </div>
+              <span className="tabular-nums text-muted-foreground w-14 text-right">{fmtDuration(w.seconds)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; projs: Project[] }) {
   const [period, setPeriod] = useState<string>("30");
   const [parentCatFilter, setParentCatFilter] = useState<string>("all");
   const [subCatFilter, setSubCatFilter] = useState<string>("all");
   const [projFilter, setProjFilter] = useState<string>("all");
+  const _today = new Date();
+  const _ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const [customFrom, setCustomFrom] = useState<string>(_ymd(new Date(_today.getFullYear(), _today.getMonth(), _today.getDate() - 7)));
+  const [customTo, setCustomTo] = useState<string>(_ymd(_today));
 
   const parents = useMemo(() => cats.filter(c => !c.parent_id), [cats]);
   const subsOfSelected = useMemo(
@@ -180,9 +216,16 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     if (period === "today") return { from: startOfToday, to: startOfToday + 24 * 3600 * 1000 };
     if (period === "yesterday") return { from: startOfToday - 24 * 3600 * 1000, to: startOfToday };
+    if (period === "custom") {
+      const [fy, fm, fd] = customFrom.split("-").map(Number);
+      const [ty, tm, td] = customTo.split("-").map(Number);
+      const from = new Date(fy, (fm || 1) - 1, fd || 1).getTime();
+      const to = new Date(ty, (tm || 1) - 1, td || 1).getTime() + 24 * 3600 * 1000;
+      return { from, to };
+    }
     const days = Number(period) || 30;
     return { from: Date.now() - days * 24 * 3600 * 1000, to: Infinity };
-  }, [period]);
+  }, [period, customFrom, customTo]);
 
   const matchesCatFilter = (logCatId: string | null) => {
     if (parentCatFilter === "all") return true;
@@ -263,6 +306,30 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
       .slice(0, 10);
   }, [filtered]);
 
+  // Top windows per app: { app, total, windows: [{title, seconds}] }
+  const byAppWindows = useMemo(() => {
+    const apps = new Map<string, { total: number; windows: Map<string, number> }>();
+    for (const l of filtered) {
+      const app = l.app_name || "—";
+      const a = apps.get(app) ?? { total: 0, windows: new Map() };
+      a.total += l.duration_seconds;
+      const t = l.window_title || "(sem título)";
+      a.windows.set(t, (a.windows.get(t) ?? 0) + l.duration_seconds);
+      apps.set(app, a);
+    }
+    return Array.from(apps.entries())
+      .map(([app, v]) => ({
+        app,
+        total: v.total,
+        windows: Array.from(v.windows.entries())
+          .map(([title, seconds]) => ({ title, seconds }))
+          .sort((a, b) => b.seconds - a.seconds)
+          .slice(0, 10),
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8);
+  }, [filtered]);
+
   const timeline = useMemo(() => {
     const m = new Map<string, number>();
     for (const l of filtered) {
@@ -286,8 +353,16 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
             <SelectItem value="30">Últimos 30 dias</SelectItem>
             <SelectItem value="90">Últimos 90 dias</SelectItem>
             <SelectItem value="365">Último ano</SelectItem>
+            <SelectItem value="custom">Personalizado…</SelectItem>
           </SelectContent>
         </Select>
+        {period === "custom" && (
+          <div className="flex items-center gap-1 text-xs">
+            <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-9 w-[150px]" />
+            <span className="text-muted-foreground">→</span>
+            <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-9 w-[150px]" />
+          </div>
+        )}
         <Select value={parentCatFilter} onValueChange={(v) => { setParentCatFilter(v); setSubCatFilter("all"); }}>
           <SelectTrigger className="w-48"><SelectValue placeholder="Categoria" /></SelectTrigger>
           <SelectContent>
@@ -385,6 +460,14 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
                 <Bar dataKey="seconds" fill="var(--primary)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          </CardContent>
+        </Card>
+        <Card className="lg:col-span-2">
+          <CardHeader><CardTitle className="text-base">Top janelas por aplicação</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {byAppWindows.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Sem dados.</div>
+            ) : byAppWindows.map(a => <AppWindowsRow key={a.app} app={a.app} total={a.total} windows={a.windows} />)}
           </CardContent>
         </Card>
         <Card className="lg:col-span-2">
@@ -755,27 +838,56 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
 // ---------- Meta (categories + projects) ----------
 
 function MetaTab({ uid, cats, projs, onChanged }: { uid: string; cats: Category[]; projs: Project[]; onChanged: () => void }) {
+  const parentCount = cats.filter(c => !c.parent_id).length;
+  const subCount = cats.length - parentCount;
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Card className="md:col-span-2">
-        <CardHeader><CardTitle className="text-base">Exportar / importar Activity</CardTitle></CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-2 text-sm">
-          <Button variant="outline" onClick={() => exportTable("activity_setup")}>
-            <Download className="h-4 w-4 mr-1" /> Exportar categorias, projetos e regras
-          </Button>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              await importTable("activity_setup", uid);
-              onChanged();
-            }}
-          >
-            <Upload className="h-4 w-4 mr-1" /> Importar JSON
-          </Button>
-        </CardContent>
-      </Card>
-      <CategoriesList cats={cats} uid={uid} onChanged={onChanged} />
-      <MetaList title="Projetos" items={projs} table="activity_projects" uid={uid} onChanged={onChanged} defaultColor="#10b981" />
+    <div className="space-y-6 max-w-3xl">
+      {/* Section: Import / Export */}
+      <section className="space-y-2">
+        <div>
+          <h3 className="text-base font-semibold">Cópia de segurança</h3>
+          <p className="text-xs text-muted-foreground">Exporta ou importa a tua configuração (categorias, projetos e regras) em JSON.</p>
+        </div>
+        <Card>
+          <CardContent className="pt-4 flex flex-wrap items-center gap-2 text-sm">
+            <Button variant="outline" size="sm" onClick={() => exportTable("activity_setup")}>
+              <Download className="h-4 w-4 mr-1" /> Exportar configuração
+            </Button>
+            <Button variant="outline" size="sm" onClick={async () => { await importTable("activity_setup", uid); onChanged(); }}>
+              <Upload className="h-4 w-4 mr-1" /> Importar JSON
+            </Button>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Section: Categories */}
+      <section className="space-y-2">
+        <div className="flex items-end justify-between gap-2">
+          <div>
+            <h3 className="text-base font-semibold">Categorias</h3>
+            <p className="text-xs text-muted-foreground">Organiza atividades em categorias e subcategorias.</p>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            <Badge variant="outline">{parentCount} principais</Badge>{" "}
+            <Badge variant="outline">{subCount} subcategorias</Badge>
+          </div>
+        </div>
+        <CategoriesList cats={cats} uid={uid} onChanged={onChanged} />
+      </section>
+
+      {/* Section: Projects */}
+      <section className="space-y-2">
+        <div className="flex items-end justify-between gap-2">
+          <div>
+            <h3 className="text-base font-semibold">Projetos</h3>
+            <p className="text-xs text-muted-foreground">Agrupa atividades por projeto para análise mais detalhada.</p>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            <Badge variant="outline">{projs.length} projeto(s)</Badge>
+          </div>
+        </div>
+        <MetaList items={projs} table="activity_projects" uid={uid} onChanged={onChanged} defaultColor="#10b981" />
+      </section>
     </div>
   );
 }
@@ -784,7 +896,13 @@ function CategoriesList({ cats, uid, onChanged }: { cats: Category[]; uid: strin
   const [name, setName] = useState("");
   const [color, setColor] = useState("#6366f1");
   const [parentId, setParentId] = useState<string>("__none__");
+  const [search, setSearch] = useState("");
   const parents = useMemo(() => cats.filter(c => !c.parent_id), [cats]);
+  const q = search.trim().toLowerCase();
+  const matchesSearch = (s: string) => !q || s.toLowerCase().includes(q);
+  const visibleParents = parents.filter(p =>
+    matchesSearch(p.name) || cats.some(c => c.parent_id === p.id && matchesSearch(c.name))
+  );
 
   async function add() {
     if (!name.trim()) return;
@@ -801,10 +919,9 @@ function CategoriesList({ cats, uid, onChanged }: { cats: Category[]; uid: strin
   }
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base">Categorias</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="pt-4 space-y-3">
         <div className="flex flex-wrap gap-2">
-          <Input placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} className="flex-1 min-w-40" />
+          <Input placeholder="Nome da categoria" value={name} onChange={(e) => setName(e.target.value)} className="flex-1 min-w-40" />
           <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded border border-input bg-transparent" />
           <Select value={parentId} onValueChange={setParentId}>
             <SelectTrigger className="w-40"><SelectValue placeholder="Categoria-mãe" /></SelectTrigger>
@@ -813,10 +930,11 @@ function CategoriesList({ cats, uid, onChanged }: { cats: Category[]; uid: strin
               {parents.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button size="sm" onClick={add}><Plus className="h-4 w-4" /></Button>
+          <Button size="sm" onClick={add}><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
         </div>
+        <Input placeholder="Pesquisar categoria…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-8" />
         <div className="space-y-1">
-          {parents.map(p => (
+          {visibleParents.map(p => (
             <div key={p.id}>
               <div className="flex items-center justify-between p-2 rounded border border-border">
                 <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: p.color }} />{p.name}</div>
@@ -825,7 +943,7 @@ function CategoriesList({ cats, uid, onChanged }: { cats: Category[]; uid: strin
                   <Button variant="ghost" size="icon" onClick={() => del(p.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
-              {cats.filter(c => c.parent_id === p.id).map(s => (
+              {cats.filter(c => c.parent_id === p.id && (matchesSearch(p.name) || matchesSearch(c.name))).map(s => (
                 <div key={s.id} className="flex items-center justify-between p-2 ml-6 rounded border border-border mt-1">
                   <div className="flex items-center gap-2 text-sm"><span className="text-muted-foreground">↳</span><span className="h-3 w-3 rounded-full" style={{ backgroundColor: s.color }} />{s.name}</div>
                   <div className="flex items-center gap-1">
@@ -836,19 +954,22 @@ function CategoriesList({ cats, uid, onChanged }: { cats: Category[]; uid: strin
               ))}
             </div>
           ))}
-          {!parents.length && <div className="text-sm text-muted-foreground">Vazio.</div>}
+          {!visibleParents.length && <div className="text-sm text-muted-foreground py-2">{q ? "Nenhuma categoria corresponde à pesquisa." : "Vazio."}</div>}
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function MetaList({ title, items, table, uid, onChanged, defaultColor }: {
-  title: string; items: { id: string; name: string; color: string }[];
+function MetaList({ items, table, uid, onChanged, defaultColor }: {
+  items: { id: string; name: string; color: string }[];
   table: "activity_projects"; uid: string; onChanged: () => void; defaultColor: string;
 }) {
   const [name, setName] = useState("");
   const [color, setColor] = useState(defaultColor);
+  const [search, setSearch] = useState("");
+  const q = search.trim().toLowerCase();
+  const visible = q ? items.filter(i => i.name.toLowerCase().includes(q)) : items;
   async function add() {
     if (!name.trim()) return;
     const { error } = await supabase.from(table).insert({ user_id: uid, name: name.trim(), color });
@@ -862,15 +983,15 @@ function MetaList({ title, items, table, uid, onChanged, defaultColor }: {
   }
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="pt-4 space-y-3">
         <div className="flex gap-2">
-          <Input placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input placeholder="Nome do projeto" value={name} onChange={(e) => setName(e.target.value)} />
           <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded border border-input bg-transparent" />
-          <Button size="sm" onClick={add}><Plus className="h-4 w-4" /></Button>
+          <Button size="sm" onClick={add}><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
         </div>
+        <Input placeholder="Pesquisar projeto…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-8" />
         <div className="space-y-1">
-          {items.map(i => (
+          {visible.map(i => (
             <div key={i.id} className="flex items-center justify-between p-2 rounded border border-border">
               <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: i.color }} />{i.name}</div>
               <div className="flex items-center gap-1">
@@ -879,7 +1000,7 @@ function MetaList({ title, items, table, uid, onChanged, defaultColor }: {
               </div>
             </div>
           ))}
-          {!items.length && <div className="text-sm text-muted-foreground">Vazio.</div>}
+          {!visible.length && <div className="text-sm text-muted-foreground py-2">{q ? "Nenhum projeto corresponde à pesquisa." : "Vazio."}</div>}
         </div>
       </CardContent>
     </Card>
