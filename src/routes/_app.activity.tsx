@@ -1104,11 +1104,18 @@ function ClassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string; 
 
   const filtered = useMemo(() => {
     let arr = allLogs.filter(l => l.category_id);
-    if (scope !== "all") {
+    if (scope === "today" || scope === "yesterday") {
+      const now = new Date();
+      const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const from = scope === "today" ? startToday : startToday - 86400_000;
+      const to = scope === "today" ? startToday + 86400_000 : startToday;
+      arr = arr.filter(l => { const t = new Date(l.start_time).getTime(); return t >= from && t < to; });
+    } else if (scope !== "all") {
       const days = scope === "7d" ? 7 : 30;
       const cutoff = Date.now() - days * 86400_000;
       arr = arr.filter(l => new Date(l.start_time).getTime() >= cutoff);
     }
+
     if (catFilter !== "all") arr = arr.filter(l => l.category_id === catFilter);
     if (projFilter !== "all") arr = arr.filter(l => (l.project_id ?? "__none__") === projFilter);
     const q = search.trim().toLowerCase();
