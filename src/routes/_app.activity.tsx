@@ -737,6 +737,24 @@ function RulesTab({ uid, rules, cats, projs, onChanged }: { uid: string; rules: 
   const [pattern, setPattern] = useState("");
   const [catId, setCatId] = useState("");
   const [projId, setProjId] = useState("");
+  const [parentFilter, setParentFilter] = useState<string>("all");
+  const [subFilter, setSubFilter] = useState<string>("all");
+  const parents = useMemo(() => cats.filter(c => !c.parent_id), [cats]);
+  const subsOfSelected = useMemo(
+    () => (parentFilter === "all" || parentFilter === "none" ? [] : cats.filter(c => c.parent_id === parentFilter)),
+    [cats, parentFilter]
+  );
+  const filteredRules = useMemo(() => {
+    if (parentFilter === "all") return rules;
+    if (parentFilter === "none") return rules.filter(r => !r.category_id);
+    const subIds = new Set(cats.filter(c => c.parent_id === parentFilter).map(c => c.id));
+    return rules.filter(r => {
+      if (!r.category_id) return false;
+      if (subFilter !== "all") return r.category_id === subFilter;
+      return r.category_id === parentFilter || subIds.has(r.category_id);
+    });
+  }, [rules, cats, parentFilter, subFilter]);
+
 
   async function add() {
     if (!pattern.trim() || !catId) { toast.error("Preenche padrão e categoria"); return; }
