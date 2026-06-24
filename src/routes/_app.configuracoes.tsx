@@ -42,6 +42,8 @@ function ConfiguracoesPage() {
 
       <NotificationsSettings />
 
+      <StorageUsagePanel />
+
       <BackupsPanel userId={user?.id} />
     </div>
   );
