@@ -431,6 +431,14 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
           </CardContent>
         </Card>
         <Card className="lg:col-span-2">
+          <CardHeader><CardTitle className="text-base">Top janelas por aplicação</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {byAppWindows.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Sem dados.</div>
+            ) : byAppWindows.map(a => <AppWindowsRow key={a.app} app={a.app} total={a.total} windows={a.windows} />)}
+          </CardContent>
+        </Card>
+        <Card className="lg:col-span-2">
           <CardHeader><CardTitle className="text-base">Horas por projeto</CardTitle></CardHeader>
           <CardContent style={{ height: 280 }}>
             {byProj.length === 0 ? <div className="text-sm text-muted-foreground">Sem projetos atribuídos.</div> : (
