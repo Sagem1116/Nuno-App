@@ -1192,8 +1192,11 @@ function ClassifiedTab({ uid, allLogs, cats, projs, onChanged }: { uid: string; 
         <Select value={scope} onValueChange={(v) => { setScope(v as any); setVisibleCount(50); }}>
           <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="today">Hoje</SelectItem>
+            <SelectItem value="yesterday">Ontem</SelectItem>
             <SelectItem value="7d">Últimos 7 dias</SelectItem>
             <SelectItem value="30d">Últimos 30 dias</SelectItem>
+
             <SelectItem value="all">Tudo</SelectItem>
           </SelectContent>
         </Select>
