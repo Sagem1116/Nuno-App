@@ -1242,7 +1242,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_db_size: { Args: never; Returns: Json }
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never
