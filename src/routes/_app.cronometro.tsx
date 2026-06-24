@@ -803,7 +803,8 @@ function CronometroPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => shift(-1)}
-            className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs"
+            disabled={period === "all"}
+            className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs disabled:opacity-40"
           >
             ◀
           </button>
@@ -812,13 +813,15 @@ function CronometroPage() {
           </span>
           <button
             onClick={() => shift(1)}
-            className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs"
+            disabled={period === "all"}
+            className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs disabled:opacity-40"
           >
             ▶
           </button>
           <button
             onClick={() => setRefDate(new Date())}
-            className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs"
+            disabled={period === "all"}
+            className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs disabled:opacity-40"
           >
             Hoje
           </button>
