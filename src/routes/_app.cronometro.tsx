@@ -897,7 +897,7 @@ function CronometroPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="glass-card p-5">
           <h3 className="text-sm uppercase tracking-wider text-muted-foreground mb-4">
-            Horas por {period === "day" ? "hora" : period === "week" ? "dia" : "dia do mês"}
+            Horas por {period === "day" ? "hora" : period === "week" ? "dia" : period === "all" ? "mês" : "dia do mês"}
           </h3>
           {totalSec === 0 ? (
             <EmptyChart label="Sem sessões neste período" />
