@@ -484,26 +484,15 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
         </Card>
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle className="text-base">Top aplicações</CardTitle></CardHeader>
-          <CardContent style={{ height: 320 }}>
-            <ResponsiveContainer>
-              <BarChart data={byApp} layout="vertical" margin={{ left: 80 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" stroke="var(--muted-foreground)" tickFormatter={(v: number) => fmtDuration(v)} />
-                <YAxis type="category" dataKey="name" stroke="var(--muted-foreground)" width={140} />
-                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} formatter={(value: number) => fmtDuration(value)} />
-                <Bar dataKey="seconds" fill="var(--primary)" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-        <Card className="lg:col-span-2">
-          <CardHeader><CardTitle className="text-base">Top janelas por aplicação</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            {byAppWindows.length === 0 ? (
+            {byAppDetailed.length === 0 ? (
               <div className="text-sm text-muted-foreground">Sem dados.</div>
-            ) : byAppWindows.map(a => <AppWindowsRow key={a.app} app={a.app} total={a.total} windows={a.windows} />)}
+            ) : byAppDetailed.map(a => (
+              <AppDetailRow key={a.app} app={a.app} total={a.total} byCat={a.byCat} windows={a.windows} maxTotal={maxAppTotal} cats={cats} />
+            ))}
           </CardContent>
         </Card>
+
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle className="text-base">Horas por projeto</CardTitle></CardHeader>
           <CardContent style={{ height: 280 }}>
