@@ -463,6 +463,7 @@ function CronometroPage() {
   }, [inPeriod, period, refDate]);
 
   const periodLabel = useMemo(() => {
+    if (period === "all") return "Sempre";
     const d = new Date(refDate);
     if (period === "day")
       return d.toLocaleDateString("pt-PT", { weekday: "long", day: "2-digit", month: "long" });
