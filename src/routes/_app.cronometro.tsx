@@ -91,9 +91,10 @@ function fromLocalInput(s: string) {
   return new Date(s).getTime();
 }
 
-type Period = "day" | "week" | "month";
+type Period = "day" | "week" | "month" | "all";
 
 function periodStart(p: Period, ref = new Date()) {
+  if (p === "all") return 0;
   const d = new Date(ref);
   d.setHours(0, 0, 0, 0);
   if (p === "day") return d.getTime();
@@ -106,6 +107,7 @@ function periodStart(p: Period, ref = new Date()) {
   return d.getTime();
 }
 function periodEnd(p: Period, ref = new Date()) {
+  if (p === "all") return Number.MAX_SAFE_INTEGER;
   const d = new Date(periodStart(p, ref));
   if (p === "day") d.setDate(d.getDate() + 1);
   else if (p === "week") d.setDate(d.getDate() + 7);
@@ -432,6 +434,18 @@ function CronometroPage() {
       }
       return arr;
     }
+    if (period === "all") {
+      // Bucket by month across all data.
+      const map = new Map<string, number>();
+      for (const s of inPeriod) {
+        const d = new Date(s.startedAt);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        map.set(key, (map.get(key) ?? 0) + s.durationSeconds / 3600);
+      }
+      return Array.from(map, ([label, hours]) => ({ label, hours })).sort((a, b) =>
+        a.label.localeCompare(b.label),
+      );
+    }
     const daysInMonth = new Date(
       new Date(refDate).getFullYear(),
       new Date(refDate).getMonth() + 1,
@@ -449,6 +463,7 @@ function CronometroPage() {
   }, [inPeriod, period, refDate]);
 
   const periodLabel = useMemo(() => {
+    if (period === "all") return "Sempre";
     const d = new Date(refDate);
     if (period === "day")
       return d.toLocaleDateString("pt-PT", { weekday: "long", day: "2-digit", month: "long" });
@@ -461,6 +476,7 @@ function CronometroPage() {
   }, [period, refDate, pStart, pEnd]);
 
   const shift = (dir: -1 | 1) => {
+    if (period === "all") return;
     const d = new Date(refDate);
     if (period === "day") d.setDate(d.getDate() + dir);
     else if (period === "week") d.setDate(d.getDate() + dir * 7);
@@ -770,7 +786,7 @@ function CronometroPage() {
 
       <section className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex gap-1 rounded-xl border border-border bg-card/60 p-1">
-          {(["day", "week", "month"] as const).map((p) => (
+          {(["day", "week", "month", "all"] as const).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
@@ -780,14 +796,15 @@ function CronometroPage() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {p === "day" ? "Dia" : p === "week" ? "Semana" : "Mês"}
+              {p === "day" ? "Dia" : p === "week" ? "Semana" : p === "month" ? "Mês" : "Total"}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => shift(-1)}
-            className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs"
+            disabled={period === "all"}
+            className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs disabled:opacity-40"
           >
             ◀
           </button>
@@ -796,13 +813,15 @@ function CronometroPage() {
           </span>
           <button
             onClick={() => shift(1)}
-            className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs"
+            disabled={period === "all"}
+            className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs disabled:opacity-40"
           >
             ▶
           </button>
           <button
             onClick={() => setRefDate(new Date())}
-            className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs"
+            disabled={period === "all"}
+            className="px-3 py-1.5 rounded-lg bg-input border border-border text-xs disabled:opacity-40"
           >
             Hoje
           </button>
@@ -878,7 +897,7 @@ function CronometroPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="glass-card p-5">
           <h3 className="text-sm uppercase tracking-wider text-muted-foreground mb-4">
-            Horas por {period === "day" ? "hora" : period === "week" ? "dia" : "dia do mês"}
+            Horas por {period === "day" ? "hora" : period === "week" ? "dia" : period === "all" ? "mês" : "dia do mês"}
           </h3>
           {totalSec === 0 ? (
             <EmptyChart label="Sem sessões neste período" />

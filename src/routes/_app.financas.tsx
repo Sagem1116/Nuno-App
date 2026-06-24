@@ -111,8 +111,18 @@ function FinancasPage() {
   useEffect(() => { if (user) load(); /* eslint-disable-next-line */ }, [user?.id]);
 
   const stats = useMemo(() => {
+    const fromTs = fromDate ? new Date(fromDate + "T00:00:00").getTime() : null;
+    const toTs = toDate ? new Date(toDate + "T23:59:59.999").getTime() : null;
+    const inRange = (t: Tx) => {
+      if (fromTs == null && toTs == null) return true;
+      const ts = new Date(t.occurred_at).getTime();
+      if (fromTs != null && ts < fromTs) return false;
+      if (toTs != null && ts > toTs) return false;
+      return true;
+    };
     let income = 0, expense = 0, savings = 0;
     for (const t of txs) {
+      if (!inRange(t)) continue;
       if (t.type === "income") income += t.amount;
       else expense += t.amount;
       if (isSavings(t.category)) {
@@ -120,8 +130,9 @@ function FinancasPage() {
       }
     }
     const balance = income - expense;
-    return { income, expense, balance, savings, personal: balance - savings };
-  }, [txs]);
+    const ranged = fromTs != null || toTs != null;
+    return { income, expense, balance, savings, personal: balance - savings, ranged };
+  }, [txs, fromDate, toDate]);
 
   const catColor = (name: string, fallback: string) =>
     cats.find((c) => c.name === name)?.color ?? fallback;
@@ -236,7 +247,7 @@ function FinancasPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard icon={Wallet} label="Saldo total" value={fmt(stats.balance)}
+        <StatCard icon={Wallet} label={stats.ranged ? "Saldo no intervalo" : "Saldo total"} value={fmt(stats.balance)}
           accent={stats.balance >= 0 ? "text-primary" : "text-destructive"}
           note={stats.savings !== 0 ? `${fmt(stats.savings)} em poupanças` : undefined} />
         <StatCard icon={Wallet} label="Saldo pessoal" value={fmt(stats.personal)}
@@ -244,8 +255,8 @@ function FinancasPage() {
           note="Saldo total − poupanças" />
         <StatCard icon={Wallet} label="Poupanças" value={fmt(stats.savings)}
           accent="text-sky-400" />
-        <StatCard icon={TrendingUp} label="Entradas" value={fmt(stats.income)} accent="text-emerald-400" />
-        <StatCard icon={TrendingDown} label="Gastos" value={fmt(stats.expense)} accent="text-orange-400" />
+        <StatCard icon={TrendingUp} label={stats.ranged ? "Entradas no intervalo" : "Entradas"} value={fmt(stats.income)} accent="text-emerald-400" />
+        <StatCard icon={TrendingDown} label={stats.ranged ? "Gastos no intervalo" : "Gastos"} value={fmt(stats.expense)} accent="text-orange-400" />
       </div>
 
       {/* Charts */}

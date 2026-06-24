@@ -4,6 +4,7 @@ import { Download, RefreshCw, Settings } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { NotificationsSettings } from "@/components/notifications-settings";
 import { AutoExportMenu } from "@/components/auto-export-menu";
+import { StorageUsagePanel } from "@/components/storage-usage-panel";
 import {
   exportTable, exportAllCombined, importTable, importAllCombined,
   getGlobalSchedule, setGlobalSchedule, getNextAutoExportAt, getLastAutoExportResult,
@@ -40,6 +41,8 @@ function ConfiguracoesPage() {
       </div>
 
       <NotificationsSettings />
+
+      <StorageUsagePanel />
 
       <BackupsPanel userId={user?.id} />
     </div>
