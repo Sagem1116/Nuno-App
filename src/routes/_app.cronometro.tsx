@@ -476,6 +476,7 @@ function CronometroPage() {
   }, [period, refDate, pStart, pEnd]);
 
   const shift = (dir: -1 | 1) => {
+    if (period === "all") return;
     const d = new Date(refDate);
     if (period === "day") d.setDate(d.getDate() + dir);
     else if (period === "week") d.setDate(d.getDate() + dir * 7);
