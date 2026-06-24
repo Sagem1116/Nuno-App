@@ -1170,68 +1170,147 @@ type AWEvent = {
   id?: number | string;
   timestamp: string;
   duration: number;
-  data?: { app?: string; title?: string; [k: string]: any };
+  data?: { app?: string; title?: string; status?: string; [k: string]: any };
 };
 
-function parseAW(input: any): AWEvent[] {
-  // Accept: array of events, { events: [] }, { buckets: { ...: { events: [] } } }
-  if (Array.isArray(input)) return input as AWEvent[];
-  if (Array.isArray(input?.events)) return input.events as AWEvent[];
+type ParsedBucket = { kind: "window" | "afk" | "unknown"; events: AWEvent[]; bucketId?: string };
+
+function classifyBucket(b: any): ParsedBucket["kind"] {
+  const t = String(b?.type || "").toLowerCase();
+  const id = String(b?.id || "").toLowerCase();
+  const client = String(b?.client || "").toLowerCase();
+  if (t.includes("afk") || id.includes("afk") || client.includes("afk")) return "afk";
+  if (t.includes("currentwindow") || id.includes("window") || client.includes("window")) return "window";
+  return "unknown";
+}
+
+function parseAWFile(input: any): ParsedBucket[] {
+  if (Array.isArray(input)) return [{ kind: "unknown", events: input as AWEvent[] }];
+  if (Array.isArray(input?.events)) return [{ kind: "unknown", events: input.events as AWEvent[] }];
   if (input?.buckets) {
-    const all: AWEvent[] = [];
+    const out: ParsedBucket[] = [];
     for (const b of Object.values<any>(input.buckets)) {
-      if (Array.isArray(b?.events)) all.push(...b.events);
+      if (Array.isArray(b?.events)) {
+        out.push({ kind: classifyBucket(b), events: b.events as AWEvent[], bucketId: b.id });
+      }
     }
-    return all;
+    return out;
   }
   return [];
 }
 
+type Interval = { start: number; end: number };
+
+function buildNotAfkIntervals(events: AWEvent[]): Interval[] {
+  const ivs: Interval[] = [];
+  for (const ev of events) {
+    if (ev.data?.status !== "not-afk") continue;
+    const s = new Date(ev.timestamp).getTime();
+    const e = s + (Number(ev.duration) || 0) * 1000;
+    if (e > s) ivs.push({ start: s, end: e });
+  }
+  ivs.sort((a, b) => a.start - b.start);
+  // merge overlapping
+  const merged: Interval[] = [];
+  for (const iv of ivs) {
+    const last = merged[merged.length - 1];
+    if (last && iv.start <= last.end) last.end = Math.max(last.end, iv.end);
+    else merged.push({ ...iv });
+  }
+  return merged;
+}
+
+function intersectIntervals(a: Interval, ivs: Interval[]): Interval[] {
+  const out: Interval[] = [];
+  // binary search could be added; linear is fine
+  for (const iv of ivs) {
+    if (iv.end <= a.start) continue;
+    if (iv.start >= a.end) break;
+    out.push({ start: Math.max(a.start, iv.start), end: Math.min(a.end, iv.end) });
+  }
+  return out;
+}
+
 function ImportTab({ uid, rules, logs, onImported }: { uid: string; rules: Rule[]; logs: Log[]; onImported: () => void }) {
   const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState<{ total: number; matched: number; unmatched: number } | null>(null);
+  const [preview, setPreview] = useState<{ total: number; matched: number; unmatched: number; filtered: number; afkUsed: boolean } | null>(null);
   const [lastImport, setLastImport] = useState(() => getLastImport("activity_logs"));
 
   async function doImport() {
-    const picked = await pickJsonFileWithName();
-    if (!picked) return;
-    const events = parseAW(picked.parsed);
-    if (!events.length) { toast.error("Nenhum evento encontrado no JSON"); return; }
+    const picks = await pickJsonFilesWithNames();
+    if (!picks.length) return;
     setBusy(true);
     try {
+      const buckets: ParsedBucket[] = [];
+      for (const p of picks) buckets.push(...parseAWFile(p.parsed));
+      const windowEvents: AWEvent[] = [];
+      const afkEvents: AWEvent[] = [];
+      for (const b of buckets) {
+        if (b.kind === "afk") afkEvents.push(...b.events);
+        else if (b.kind === "window") windowEvents.push(...b.events);
+        else {
+          // unknown: try to detect per event
+          for (const ev of b.events) {
+            if (ev.data?.status) afkEvents.push(ev);
+            else windowEvents.push(ev);
+          }
+        }
+      }
+      if (!windowEvents.length && !afkEvents.length) {
+        toast.error("Nenhum evento encontrado nos ficheiros");
+        return;
+      }
+      if (!windowEvents.length) {
+        toast.error("Apenas AFK foi fornecido. Adiciona também um bucket de janelas (aw-watcher-window) para criar logs.");
+        return;
+      }
+
+      const afkIvs = afkEvents.length ? buildNotAfkIntervals(afkEvents) : null;
+
       let matched = 0;
-      const rows = events.map(ev => {
+      let filtered = 0;
+      const rows: any[] = [];
+      for (const ev of windowEvents) {
         const app = ev.data?.app ?? "";
         const title = ev.data?.title ?? "";
-        const start = new Date(ev.timestamp);
-        const end = new Date(start.getTime() + (Number(ev.duration) || 0) * 1000);
+        const s = new Date(ev.timestamp).getTime();
+        const e = s + (Number(ev.duration) || 0) * 1000;
+        if (e <= s) continue;
         const m = matchRule(app, title, rules);
+        const baseExt = ev.id != null ? `aw:${ev.id}:${ev.timestamp}` : `aw:${ev.timestamp}:${app}`;
+        const segments = afkIvs ? intersectIntervals({ start: s, end: e }, afkIvs) : [{ start: s, end: e }];
+        if (afkIvs && !segments.length) { filtered++; continue; }
         if (m) matched++;
-        return {
-          user_id: uid,
-          start_time: start.toISOString(),
-          end_time: end.toISOString(),
-          duration_seconds: Math.round(Number(ev.duration) || 0),
-          app_name: app,
-          window_title: title,
-          category_id: m?.category_id ?? null,
-          project_id: m?.project_id ?? null,
-          source: "activitywatch",
-          external_id: ev.id != null ? `aw:${ev.id}:${ev.timestamp}` : `aw:${ev.timestamp}:${app}`,
-        };
-      }).filter(r => r.duration_seconds > 0);
+        for (let i = 0; i < segments.length; i++) {
+          const seg = segments[i];
+          const dur = Math.round((seg.end - seg.start) / 1000);
+          if (dur <= 0) continue;
+          rows.push({
+            user_id: uid,
+            start_time: new Date(seg.start).toISOString(),
+            end_time: new Date(seg.end).toISOString(),
+            duration_seconds: dur,
+            app_name: app,
+            window_title: title,
+            category_id: m?.category_id ?? null,
+            project_id: m?.project_id ?? null,
+            source: "activitywatch",
+            external_id: segments.length > 1 ? `${baseExt}:${i}` : baseExt,
+          });
+        }
+      }
 
-      // upsert in chunks
       const chunk = 500;
       for (let i = 0; i < rows.length; i += chunk) {
         const { error } = await supabase.from("activity_logs").upsert(rows.slice(i, i + chunk), { onConflict: "user_id,external_id" });
         if (error) throw error;
       }
-      setPreview({ total: rows.length, matched, unmatched: rows.length - matched });
-      recordImport("activity_logs", picked.filename);
+      setPreview({ total: rows.length, matched, unmatched: windowEvents.length - matched - filtered, filtered, afkUsed: !!afkIvs });
+      const fname = picks.map(p => p.filename).join(" + ");
+      recordImport("activity_logs", fname);
       recordLastImportIds("activity_logs", rows.map(r => r.external_id));
       setLastImport(getLastImport("activity_logs"));
-      toast.success(`${rows.length} evento(s) importados`);
+      toast.success(`${rows.length} evento(s) importados${afkIvs ? ` · ${filtered} filtrados por AFK` : ""}`);
       onImported();
     } catch (e: any) { toast.error(e.message); }
     finally { setBusy(false); }
@@ -1243,9 +1322,9 @@ function ImportTab({ uid, rules, logs, onImported }: { uid: string; rules: Rule[
         <CardHeader><CardTitle className="text-base">Importar JSON do ActivityWatch</CardTitle></CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p className="text-muted-foreground">
-            Exporta um bucket do ActivityWatch (ex.: <code>aw-watcher-window</code>) em JSON e seleciona aqui o ficheiro.
-            Aceita formato bruto de eventos, <code>{`{ events: [] }`}</code> ou <code>{`{ buckets: {...} }`}</code>.
-            Registos duplicados (mesmo evento) são ignorados.
+            Exporta buckets do ActivityWatch (ex.: <code>aw-watcher-window</code> e/ou <code>aw-watcher-afk</code>) e seleciona um ou mais ficheiros aqui.
+            Se incluíres o bucket AFK, os eventos de janela são automaticamente filtrados/ajustados para contar apenas o tempo em que estiveste ativo (<code>not-afk</code>).
+            Aceita formato bruto de eventos, <code>{`{ events: [] }`}</code> ou <code>{`{ buckets: {...} }`}</code>. Registos duplicados são ignorados.
           </p>
           <div className="flex gap-2">
             <Button onClick={doImport} disabled={busy}><Upload className="h-4 w-4 mr-1" /> {busy ? "A importar..." : "Importar JSON"}</Button>
@@ -1254,8 +1333,9 @@ function ImportTab({ uid, rules, logs, onImported }: { uid: string; rules: Rule[
             </Button>
           </div>
           {preview && (
-            <div className="text-sm">
-              Importados: <b>{preview.total}</b> • Classificados automaticamente: <b>{preview.matched}</b> • Por classificar: <b>{preview.unmatched}</b>
+            <div className="text-sm space-y-1">
+              <div>Importados: <b>{preview.total}</b> • Classificados: <b>{preview.matched}</b> • Por classificar: <b>{preview.unmatched}</b></div>
+              {preview.afkUsed && <div className="text-muted-foreground">AFK aplicado · {preview.filtered} eventos descartados por estarem totalmente em AFK.</div>}
             </div>
           )}
           {lastImport && (
