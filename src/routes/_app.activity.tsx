@@ -274,6 +274,30 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
       .slice(0, 10);
   }, [filtered]);
 
+  // Top windows per app: { app, total, windows: [{title, seconds}] }
+  const byAppWindows = useMemo(() => {
+    const apps = new Map<string, { total: number; windows: Map<string, number> }>();
+    for (const l of filtered) {
+      const app = l.app_name || "—";
+      const a = apps.get(app) ?? { total: 0, windows: new Map() };
+      a.total += l.duration_seconds;
+      const t = l.window_title || "(sem título)";
+      a.windows.set(t, (a.windows.get(t) ?? 0) + l.duration_seconds);
+      apps.set(app, a);
+    }
+    return Array.from(apps.entries())
+      .map(([app, v]) => ({
+        app,
+        total: v.total,
+        windows: Array.from(v.windows.entries())
+          .map(([title, seconds]) => ({ title, seconds }))
+          .sort((a, b) => b.seconds - a.seconds)
+          .slice(0, 10),
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8);
+  }, [filtered]);
+
   const timeline = useMemo(() => {
     const m = new Map<string, number>();
     for (const l of filtered) {
