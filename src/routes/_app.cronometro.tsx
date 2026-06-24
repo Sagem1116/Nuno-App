@@ -786,7 +786,7 @@ function CronometroPage() {
 
       <section className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex gap-1 rounded-xl border border-border bg-card/60 p-1">
-          {(["day", "week", "month"] as const).map((p) => (
+          {(["day", "week", "month", "all"] as const).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
@@ -796,7 +796,7 @@ function CronometroPage() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {p === "day" ? "Dia" : p === "week" ? "Semana" : "Mês"}
+              {p === "day" ? "Dia" : p === "week" ? "Semana" : p === "month" ? "Mês" : "Total"}
             </button>
           ))}
         </div>
