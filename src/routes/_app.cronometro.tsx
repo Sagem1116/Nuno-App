@@ -434,6 +434,18 @@ function CronometroPage() {
       }
       return arr;
     }
+    if (period === "all") {
+      // Bucket by month across all data.
+      const map = new Map<string, number>();
+      for (const s of inPeriod) {
+        const d = new Date(s.startedAt);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        map.set(key, (map.get(key) ?? 0) + s.durationSeconds / 3600);
+      }
+      return Array.from(map, ([label, hours]) => ({ label, hours })).sort((a, b) =>
+        a.label.localeCompare(b.label),
+      );
+    }
     const daysInMonth = new Date(
       new Date(refDate).getFullYear(),
       new Date(refDate).getMonth() + 1,
