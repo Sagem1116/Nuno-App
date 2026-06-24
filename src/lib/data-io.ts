@@ -102,6 +102,30 @@ export function pickJsonFileWithName(): Promise<JsonFilePick> {
   });
 }
 
+export function pickJsonFilesWithNames(): Promise<{ parsed: unknown; filename: string }[]> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.multiple = true;
+    input.onchange = async () => {
+      const files = Array.from(input.files ?? []);
+      if (!files.length) return resolve([]);
+      const out: { parsed: unknown; filename: string }[] = [];
+      for (const f of files) {
+        try {
+          const text = await f.text();
+          out.push({ parsed: JSON.parse(text), filename: f.name });
+        } catch {
+          toast.error(`JSON inválido: ${f.name}`);
+        }
+      }
+      resolve(out);
+    };
+    input.click();
+  });
+}
+
 
 const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 
