@@ -186,7 +186,6 @@ function Dashboard() {
         else personalIncome += t.amount;
       } else {
         expense += t.amount;
-        // "transferência" out of personal IS a personal expense (money leaving personal).
         if (cat === "poupanças") savingsOut += t.amount;
         else personalExpense += t.amount;
       }
@@ -199,6 +198,22 @@ function Dashboard() {
     const topCats = Array.from(byCat, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 4);
     return { income, expense, balance, savings, personal, topCats, count: m.length };
   }, [visibleTxs, periodFilter, today]);
+
+  // Cumulative totals matching Finanças "Saldo total" (all transactions, no period filter).
+  const totalStats = useMemo(() => {
+    let income = 0, expense = 0, savingsIn = 0, savingsOut = 0;
+    for (const t of txs) {
+      const cat = (t.category || "").toLowerCase().normalize("NFC");
+      if (t.type === "income") {
+        income += t.amount;
+        if (cat === "poupanças") savingsIn += t.amount;
+      } else {
+        expense += t.amount;
+        if (cat === "poupanças") savingsOut += t.amount;
+      }
+    }
+    return { balance: income - expense, savings: savingsIn - savingsOut };
+  }, [txs]);
 
   const tripStats = useMemo(() => {
     const upcoming = visibleTrips
