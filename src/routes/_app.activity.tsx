@@ -168,6 +168,10 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
   const [parentCatFilter, setParentCatFilter] = useState<string>("all");
   const [subCatFilter, setSubCatFilter] = useState<string>("all");
   const [projFilter, setProjFilter] = useState<string>("all");
+  const _today = new Date();
+  const _ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const [customFrom, setCustomFrom] = useState<string>(_ymd(new Date(_today.getFullYear(), _today.getMonth(), _today.getDate() - 7)));
+  const [customTo, setCustomTo] = useState<string>(_ymd(_today));
 
   const parents = useMemo(() => cats.filter(c => !c.parent_id), [cats]);
   const subsOfSelected = useMemo(
@@ -180,9 +184,16 @@ function DashboardTab({ logs, cats, projs }: { logs: Log[]; cats: Category[]; pr
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     if (period === "today") return { from: startOfToday, to: startOfToday + 24 * 3600 * 1000 };
     if (period === "yesterday") return { from: startOfToday - 24 * 3600 * 1000, to: startOfToday };
+    if (period === "custom") {
+      const [fy, fm, fd] = customFrom.split("-").map(Number);
+      const [ty, tm, td] = customTo.split("-").map(Number);
+      const from = new Date(fy, (fm || 1) - 1, fd || 1).getTime();
+      const to = new Date(ty, (tm || 1) - 1, td || 1).getTime() + 24 * 3600 * 1000;
+      return { from, to };
+    }
     const days = Number(period) || 30;
     return { from: Date.now() - days * 24 * 3600 * 1000, to: Infinity };
-  }, [period]);
+  }, [period, customFrom, customTo]);
 
   const matchesCatFilter = (logCatId: string | null) => {
     if (parentCatFilter === "all") return true;
